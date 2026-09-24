@@ -104,6 +104,7 @@ fun MurmurScreen(modifier: Modifier = Modifier) {
         Library(viewState, viewModel)
       } else {
         JoinForm(viewState.settings.serverUrl, viewModel::join)
+        SabpImportRow(viewModel::importSabp)
       }
     }
   }
@@ -114,6 +115,14 @@ fun MurmurScreen(modifier: Modifier = Modifier) {
       confirmButton = { TextButton(onClick = viewModel::dismissError) { Text("OK") } },
       title = { Text("Murmur") },
       text = { Text(error) },
+    )
+  }
+  viewState.message?.let { message ->
+    AlertDialog(
+      onDismissRequest = viewModel::dismissMessage,
+      confirmButton = { TextButton(onClick = viewModel::dismissMessage) { Text("OK") } },
+      title = { Text("Smart AudioBook Player") },
+      text = { Text(message) },
     )
   }
   if (viewState.showSharePicker) {
@@ -242,6 +251,7 @@ private fun Library(
     item {
       SwitchRow("Share books I receive", "Offer downloaded books to others automatically", settings.keepSharing, viewModel::setKeepSharing)
     }
+    item { SabpImportRow(viewModel::importSabp) }
     item {
       ListItem(
         modifier = Modifier.clickable { confirmLeave = true },
@@ -251,6 +261,15 @@ private fun Library(
     }
     item { Spacer(Modifier.padding(40.dp)) }
   }
+}
+
+@Composable
+private fun SabpImportRow(onClick: () -> Unit) {
+  ListItem(
+    modifier = Modifier.clickable(onClick = onClick),
+    leadingContent = { Icon(VoiceIcons.History, contentDescription = null) },
+    supportingContent = { Text("Copy finished books and positions for books not started here yet") },
+  ) { Text("Import Smart AudioBook Player progress") }
 }
 
 @Composable

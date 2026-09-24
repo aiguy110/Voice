@@ -22,6 +22,7 @@ data class MurmurViewState(
   val shareableBooks: List<Book>,
   val busy: Boolean,
   val error: String?,
+  val message: String?,
   val showSharePicker: Boolean,
 )
 
@@ -30,12 +31,14 @@ class MurmurViewModel(
   private val repository: MurmurRepository,
   private val bookRepository: BookRepository,
   private val navigator: Navigator,
+  private val sabpImport: SabpImport,
 ) {
 
   private val scope = MainScope()
   private var library by mutableStateOf<List<LibraryBook>>(emptyList())
   private var busy by mutableStateOf(false)
   private var error by mutableStateOf<String?>(null)
+  private var message by mutableStateOf<String?>(null)
   private var showSharePicker by mutableStateOf(false)
 
   @Composable
@@ -50,6 +53,7 @@ class MurmurViewModel(
       shareableBooks = books.filter { it.content.isActive && it.id.value !in sharedVoiceIds },
       busy = busy,
       error = error,
+      message = message,
       showSharePicker = showSharePicker,
     )
   }
@@ -109,8 +113,21 @@ class MurmurViewModel(
 
   fun setKeepSharing(keep: Boolean) = run { repository.setKeepSharing(keep) }
 
+  fun importSabp() = run {
+    val result = sabpImport.run()
+    message = if (result.finished + result.inProgress == 0) {
+      "No Smart AudioBook Player progress found for books Voice shows as not started."
+    } else {
+      "Imported ${result.finished} finished and ${result.inProgress} in-progress books from Smart AudioBook Player."
+    }
+  }
+
   fun dismissError() {
     error = null
+  }
+
+  fun dismissMessage() {
+    message = null
   }
 
   private fun run(action: suspend () -> Unit) {
