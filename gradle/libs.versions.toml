@@ -38,6 +38,7 @@ kotlin-powerAssert-runtime = { module = "org.jetbrains.kotlin:kotlin-power-asser
 kotlin-testJunit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 compose-compiler-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
 documentFile = "androidx.documentfile:documentfile:1.1.0"
+work-runtime = "androidx.work:work-runtime-ktx:2.12.0"
 datastore = "androidx.datastore:datastore-core:1.2.1"
 seismic = "com.squareup:seismic:1.0.3"
 turbine = "app.cash.turbine:turbine:1.2.1"

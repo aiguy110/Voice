@@ -31,6 +31,7 @@ android {
 
   defaultConfig {
     applicationId = "de.ph1b.audiobook"
+    applicationIdSuffix = providers.gradleProperty("voice.applicationIdSuffix").orNull
     versionName = providers.gradleProperty("voice.versionName").orNull ?: "1.0.0"
     versionCode = providers.gradleProperty("voice.versionCode").orNull?.toInt() ?: Int.MAX_VALUE
 
@@ -176,6 +177,7 @@ dependencies {
   implementation(projects.core.documentfile)
   implementation(projects.features.onboarding)
   implementation(projects.features.bookmark)
+  implementation(projects.features.murmur)
   implementation(projects.features.widget)
 
   implementation(libs.appCompat)

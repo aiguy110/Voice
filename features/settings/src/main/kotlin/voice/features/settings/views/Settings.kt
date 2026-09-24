@@ -108,6 +108,22 @@ private fun Settings(
         }
       }
       item {
+        ListItem(
+          modifier = Modifier.clickable { listener.openMurmur() },
+          leadingContent = {
+            Icon(
+              imageVector = VoiceIcons.LibraryBooks,
+              contentDescription = null,
+            )
+          },
+          supportingContent = {
+            Text("Share audiobooks with your community")
+          },
+        ) {
+          Text("Murmur")
+        }
+      }
+      item {
         ThemeModeRow(viewState.themeMode, listener::onThemeModeRowClick)
       }
       if (viewState.showThemeColorSchemePref) {

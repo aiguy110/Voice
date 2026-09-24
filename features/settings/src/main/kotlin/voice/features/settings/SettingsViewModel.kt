@@ -211,6 +211,10 @@ class SettingsViewModel(
     navigator.goTo(Destination.SupportVoice)
   }
 
+  override fun openMurmur() {
+    navigator.goTo(Destination.Murmur)
+  }
+
   override fun openFolderPicker() {
     navigator.goTo(Destination.FolderPicker)
   }

@@ -1,0 +1,61 @@
+name: Murmur APK
+
+# Builds the Voice + Murmur app from the `murmur` branch and publishes it as the
+# latest GitHub release, so https://github.com/<owner>/Voice/releases/latest/download/murmur.apk
+# always points at the newest build.
+
+on:
+  push:
+    branches: [ murmur ]
+  workflow_dispatch: { }
+
+concurrency:
+  group: murmur-apk
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/build_setup
+
+      - name: Write signing key
+        env:
+          MURMUR_KEYSTORE: ${{ secrets.MURMUR_KEYSTORE }}
+        run: echo "$MURMUR_KEYSTORE" | base64 -d > "$RUNNER_TEMP/murmur.keystore"
+
+      - name: Test and build
+        env:
+          STORE_PASSWORD: ${{ secrets.MURMUR_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MURMUR_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.MURMUR_KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-scan :features:murmur:testDebugUnitTest :app:assembleFreeRelease \
+            -Pvoice.applicationIdSuffix=.murmur \
+            -Pvoice.versionName="murmur-${{ github.run_number }}" \
+            -Pvoice.versionCode="${{ github.run_number }}" \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/murmur.keystore" \
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+          cp app/build/outputs/apk/free/release/app-free-release.apk murmur.apk
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: murmur-apk
+          path: murmur.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "murmur-${{ github.run_number }}" murmur.apk \
+            --target "${{ github.sha }}" \
+            --title "Murmur build ${{ github.run_number }}" \
+            --notes "Voice + Murmur, built from ${{ github.sha }}." \
+            --latest
