@@ -148,7 +148,7 @@ class MurmurViewModel(
   }
 
   private fun describe(code: String): String = when (code) {
-    "username_taken" -> "That username is already taken."
+    "username_taken" -> "That username belongs to someone else. If it's yours, join from the Tailscale account you first used it with."
     "invalid_username" -> "Usernames are 2–32 letters, digits, '.', '_' or '-'."
     "unauthorized" -> "The server doesn't recognise this device any more. Leave and join again."
     "already_holding" -> "You already have this book."

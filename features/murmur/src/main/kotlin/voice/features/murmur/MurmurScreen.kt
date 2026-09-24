@@ -158,7 +158,8 @@ private fun JoinForm(
   Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text(
       "Murmur shares audiobooks with a small community. Books you share stay on your phone; " +
-        "when someone asks for one, your phone sends it through the community server.",
+        "when someone asks for one, your phone sends it through the community server. " +
+        "Already have a username here? Enter it to get your account back.",
     )
     OutlinedTextField(
       value = serverUrl,
@@ -203,7 +204,7 @@ private fun Library(
       },
       dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Stay") } },
       title = { Text("Leave this community?") },
-      text = { Text("Your username can't be recovered on this server once you leave.") },
+      text = { Text("To get your username back later, join again with it from the same Tailscale account.") },
     )
   }
   LazyColumn(Modifier.fillMaxSize()) {
