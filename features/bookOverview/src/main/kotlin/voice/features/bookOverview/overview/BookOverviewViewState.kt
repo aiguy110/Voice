@@ -3,11 +3,13 @@ package voice.features.bookOverview.overview
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import voice.core.data.BookId
+import voice.features.bookOverview.community.CommunityBook
 import voice.features.bookOverview.search.BookSearchViewState
 
 @Immutable
 data class BookOverviewViewState(
   val books: Map<BookOverviewCategory, Map<BookId, State<BookOverviewItemViewState>>>,
+  val community: Community?,
   val layoutMode: BookOverviewLayoutMode,
   val playButtonState: PlayButtonState?,
   val showAddBookHint: Boolean,
@@ -24,6 +26,7 @@ data class BookOverviewViewState(
   companion object {
     val Loading = BookOverviewViewState(
       books = mapOf(),
+      community = null,
       layoutMode = BookOverviewLayoutMode.List,
       playButtonState = null,
       showAddBookHint = false,
@@ -41,6 +44,12 @@ data class BookOverviewViewState(
       selection = emptySet(),
     )
   }
+
+  @Immutable
+  data class Community(
+    val name: String,
+    val books: List<CommunityBook>,
+  )
 
   enum class PlayButtonState {
     Playing,

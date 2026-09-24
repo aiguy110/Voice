@@ -18,5 +18,7 @@ enum class BottomSheetItem(
   BookCategoryMarkAsNotStarted(StringsR.string.book_category_action_mark_not_started, VoiceIcons.HourglassEmpty),
   BookCategoryMarkAsCurrent(StringsR.string.book_category_action_mark_current, VoiceIcons.NotStarted),
   BookCategoryMarkAsCompleted(StringsR.string.book_category_action_mark_completed, VoiceIcons.Done),
+  ShareWithCommunity(StringsR.string.book_community_action_share, VoiceIcons.Share),
+  StopSharingWithCommunity(StringsR.string.book_community_action_share_stop, VoiceIcons.Close),
   SelectMultiple(StringsR.string.book_selection_action_start, VoiceIcons.Check),
 }

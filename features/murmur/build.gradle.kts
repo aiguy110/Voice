@@ -14,6 +14,7 @@ dependencies {
   implementation(projects.core.logging.api)
   implementation(projects.core.scanner)
   implementation(projects.core.ui)
+  implementation(projects.features.bookOverview)
   implementation(projects.navigation)
 
   implementation(libs.datastore)

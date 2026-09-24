@@ -6,6 +6,16 @@
     <string name="book.category.action.mark_current">Mark as Current</string>
     <!-- Bottom-sheet action for moving a book to the not-started category. -->
     <string name="book.category.action.mark_not_started">Mark as Not Started Yet</string>
+    <!-- Bottom-sheet action that asks the community library for a copy of one of its books. -->
+    <string name="book.community.action.request">Request a Copy</string>
+    <!-- Bottom-sheet action that withdraws a request for a community book. -->
+    <string name="book.community.action.request_cancel">Cancel Request</string>
+    <!-- Bottom-sheet action that offers a local book to the community library. -->
+    <string name="book.community.action.share">Share with Community</string>
+    <!-- Bottom-sheet action that withdraws a local book from the community library. -->
+    <string name="book.community.action.share_stop">Stop Sharing with Community</string>
+    <!-- Content description of the badge on books shared with the community library. -->
+    <string name="book.community.shared">Shared with community</string>
     <!-- Bottom-sheet action title for deleting a book. -->
     <string name="book.delete.bottom_sheet.title">Delete Book</string>
     <!-- Checkbox label confirming that book files should be deleted. -->

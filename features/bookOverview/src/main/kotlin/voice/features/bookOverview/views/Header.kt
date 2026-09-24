@@ -12,9 +12,17 @@ internal fun Header(
   category: BookOverviewCategory,
   modifier: Modifier = Modifier,
 ) {
+  Header(text = stringResource(id = category.nameRes), modifier = modifier)
+}
+
+@Composable
+internal fun Header(
+  text: String,
+  modifier: Modifier = Modifier,
+) {
   Text(
     modifier = modifier,
-    text = stringResource(id = category.nameRes),
+    text = text,
     style = MaterialTheme.typography.headlineSmall,
   )
 }

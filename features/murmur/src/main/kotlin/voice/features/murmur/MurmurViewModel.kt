@@ -35,7 +35,6 @@ class MurmurViewModel(
 ) {
 
   private val scope = MainScope()
-  private var library by mutableStateOf<List<LibraryBook>>(emptyList())
   private var busy by mutableStateOf(false)
   private var error by mutableStateOf<String?>(null)
   private var message by mutableStateOf<String?>(null)
@@ -45,6 +44,7 @@ class MurmurViewModel(
   fun viewState(): MurmurViewState {
     val settings by remember { repository.settings }.collectAsState(initial = MurmurSettings())
     val books by remember { bookRepository.flow() }.collectAsState(initial = emptyList())
+    val library by repository.library.collectAsState()
     val sharedVoiceIds = settings.shared.values.toSet()
     return MurmurViewState(
       connection = settings.connection,
@@ -61,7 +61,7 @@ class MurmurViewModel(
   fun close() = navigator.goBack()
 
   fun refresh() = run {
-    library = repository.library()
+    repository.refreshLibrary()
     repository.syncNow()
   }
 
@@ -70,12 +70,10 @@ class MurmurViewModel(
     username: String,
   ) = run {
     repository.join(serverUrl, username)
-    library = repository.library()
   }
 
   fun leave() = run {
     repository.leave()
-    library = emptyList()
   }
 
   fun openSharePicker() {
@@ -89,22 +87,18 @@ class MurmurViewModel(
   fun share(book: Book) = run {
     showSharePicker = false
     repository.share(book)
-    library = repository.library()
   }
 
   fun stopSharing(book: LibraryBook) = run {
     repository.stopSharing(book.id)
-    library = repository.library()
   }
 
   fun request(book: LibraryBook) = run {
     repository.request(book.id)
-    library = repository.library()
   }
 
   fun cancelRequest(book: LibraryBook) = run {
     repository.cancelRequest(book.id)
-    library = repository.library()
   }
 
   fun setDownloadFolder(uri: Uri) = run { repository.setDownloadFolder(uri) }

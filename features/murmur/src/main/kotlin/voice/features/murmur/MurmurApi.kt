@@ -51,6 +51,18 @@ class MurmurApi(
 
   suspend fun unwant(bookId: String) = call(request("books/$bookId/want").delete())
 
+  suspend fun setCover(
+    bookId: String,
+    jpeg: ByteArray,
+  ) = call(request("books/$bookId/cover").put(jpeg.toRequestBody(JPEG)))
+
+  /** Null if the book has no cover. */
+  suspend fun cover(bookId: String): ByteArray? = execute(get("books/$bookId/cover")).use {
+    if (it.code == 404) return null
+    if (!it.isSuccessful) throw it.toException()
+    withContext(Dispatchers.IO) { it.body.bytes() }
+  }
+
   suspend fun uploads(): List<Upload> = call(get("me/uploads"), UploadsResponse.serializer()).uploads
 
   suspend fun downloads(): List<Download> = call(get("me/downloads"), DownloadsResponse.serializer()).downloads
@@ -140,6 +152,7 @@ class MurmurApi(
   companion object {
     const val UPLOAD_OFFSET = "Upload-Offset"
     private val JSON = "application/json".toMediaType()
+    private val JPEG = "image/jpeg".toMediaType()
     val OCTETS = "application/offset+octet-stream".toMediaType()
 
     private val defaultClient = OkHttpClient.Builder()
@@ -187,6 +200,7 @@ data class LibraryBook(
   val holders: List<String>,
   val wanters: List<String>,
   val mine: String? = null,
+  val cover: Boolean = false,
 ) {
   val holding: Boolean get() = mine == "holding"
   val wanting: Boolean get() = mine == "wanting"

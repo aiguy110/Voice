@@ -36,6 +36,7 @@ class MurmurSync(
   private val settingsStore: DataStore<MurmurSettings>,
   private val localBookFiles: LocalBookFiles,
   private val mediaScanTrigger: MediaScanTrigger,
+  private val repository: MurmurRepository,
 ) {
 
   private val mutex = Mutex()
@@ -45,9 +46,13 @@ class MurmurSync(
     val connection = settings.connection ?: return
     if (!settings.allowMetered && context.getSystemService<ConnectivityManager>()?.isActiveNetworkMetered != false) {
       Logger.i("Murmur: on a metered network and mobile data is not allowed; skipping transfers")
-      return
+    } else {
+      transfer(MurmurApi(connection.serverUrl, connection.token))
     }
-    val api = MurmurApi(connection.serverUrl, connection.token)
+    repository.refreshLibrary()
+  }
+
+  private suspend fun transfer(api: MurmurApi) {
     api.uploads().forEach { upload ->
       runCatching { upload(api, upload) }.onFailure { Logger.w(it, "Murmur: upload of ${upload.title} failed") }
     }

@@ -48,6 +48,7 @@ import voice.core.ui.icons.VoiceIcons
 import voice.core.ui.playButtonSharedBoundsModifier
 import voice.features.bookOverview.bottomSheet.BottomSheetContent
 import voice.features.bookOverview.bottomSheet.BottomSheetItem
+import voice.features.bookOverview.community.CommunityBook
 import voice.features.bookOverview.deleteBook.DeleteBookDialog
 import voice.features.bookOverview.di.BookOverviewGraph
 import voice.features.bookOverview.editTitle.EditBookTitleDialog
@@ -104,6 +105,7 @@ fun BookOverviewScreen(modifier: Modifier = Modifier) {
   )
 
   var showBottomSheet by remember { mutableStateOf(false) }
+  var communityBook by remember { mutableStateOf<CommunityBook?>(null) }
   BookOverview(
     viewState = viewState,
     onSettingsClick = bookOverviewViewModel::onSettingsClick,
@@ -126,6 +128,7 @@ fun BookOverviewScreen(modifier: Modifier = Modifier) {
     onSelectionClear = bookOverviewViewModel::onSelectionClear,
     onSelectAll = bookOverviewViewModel::onSelectAll,
     onMoveSelectionToCategory = bookOverviewViewModel::onMoveSelectionToCategory,
+    onCommunityBookClick = { communityBook = it },
   )
   val deleteBookViewState = deleteBookViewModel.state.value
   if (deleteBookViewState != null) {
@@ -177,6 +180,34 @@ fun BookOverviewScreen(modifier: Modifier = Modifier) {
       },
     )
   }
+
+  communityBook?.let { book ->
+    val sheetState = rememberBottomSheetState(
+      initialValue = Hidden,
+      enabledValues = setOf(Hidden, Expanded),
+    )
+    fun act(action: (String) -> Unit) {
+      action(book.id)
+      scope.launch {
+        sheetState.hide()
+        communityBook = null
+      }
+    }
+    ModalBottomSheet(
+      modifier = modifier,
+      sheetState = sheetState,
+      content = {
+        CommunityBookSheetContent(
+          book = book,
+          onRequest = { act(bookOverviewViewModel::onCommunityRequest) },
+          onCancelRequest = { act(bookOverviewViewModel::onCommunityCancelRequest) },
+        )
+      },
+      onDismissRequest = {
+        communityBook = null
+      },
+    )
+  }
 }
 
 @Composable
@@ -195,6 +226,7 @@ internal fun BookOverview(
   onSelectionClear: () -> Unit,
   onSelectAll: () -> Unit,
   onMoveSelectionToCategory: (BookOverviewCategory) -> Unit,
+  onCommunityBookClick: (CommunityBook) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   BackHandler(enabled = viewState.selection.isNotEmpty(), onBack = onSelectionClear)
@@ -248,6 +280,8 @@ internal fun BookOverview(
             onBookLongClick = onBookLongClick,
             showPermissionBugCard = viewState.showStoragePermissionBugCard,
             onPermissionBugCardClick = onPermissionBugCardClick,
+            community = viewState.community,
+            onCommunityBookClick = onCommunityBookClick,
           )
         }
         BookOverviewLayoutMode.Grid -> {
@@ -258,6 +292,8 @@ internal fun BookOverview(
             onBookLongClick = onBookLongClick,
             showPermissionBugCard = viewState.showStoragePermissionBugCard,
             onPermissionBugCardClick = onPermissionBugCardClick,
+            community = viewState.community,
+            onCommunityBookClick = onCommunityBookClick,
           )
         }
       }
@@ -325,6 +361,7 @@ fun BookOverviewPreview(
       onSelectionClear = {},
       onSelectAll = {},
       onMoveSelectionToCategory = {},
+      onCommunityBookClick = {},
     )
   }
 }
@@ -362,6 +399,7 @@ internal class BookOverviewPreviewParameterProvider : PreviewParameterProvider<B
           }
         },
       ),
+      community = null,
       layoutMode = BookOverviewLayoutMode.List,
       playButtonState = BookOverviewViewState.PlayButtonState.Paused,
       showAddBookHint = false,

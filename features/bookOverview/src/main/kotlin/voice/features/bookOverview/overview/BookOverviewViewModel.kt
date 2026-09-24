@@ -18,6 +18,7 @@ import androidx.core.net.toUri
 import androidx.datastore.core.DataStore
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import voice.core.common.AppInfoProvider
 import voice.core.common.DispatcherProvider
@@ -45,6 +46,7 @@ import voice.core.scanner.DeviceHasStoragePermissionBug
 import voice.core.scanner.MediaScanTrigger
 import voice.core.search.BookSearch
 import voice.core.ui.GridCount
+import voice.features.bookOverview.community.CommunityLibrary
 import voice.features.bookOverview.di.BookOverviewScope
 import voice.features.bookOverview.editBookCategory.moveToCategory
 import voice.features.bookOverview.search.BookSearchViewState
@@ -78,8 +80,11 @@ class BookOverviewViewModel(
   private val experimentalPlaybackPersistenceFeatureFlag: FeatureFlag<Boolean>,
   @KioskModeFeatureFlagQualifier
   private val kioskModeFeatureFlag: FeatureFlag<Boolean>,
+  communityLibraries: Set<CommunityLibrary>,
   dispatcherProvider: DispatcherProvider,
 ) {
+
+  private val communityLibrary = communityLibraries.firstOrNull()
 
   private val scope = MainScope(dispatcherProvider)
   private var searchActive by mutableStateOf(false)
@@ -89,6 +94,7 @@ class BookOverviewViewModel(
 
   fun attach() {
     mediaScanner.scan()
+    communityLibrary?.refresh()
   }
 
   @Composable
@@ -108,6 +114,8 @@ class BookOverviewViewModel(
       .collectAsState(initial = false).value
     val folderPickerMovedDialogShown = remember { folderPickerMovedDialogShownStore.data }
       .collectAsState(initial = false).value
+    val community = remember { communityLibrary?.state ?: flowOf(null) }
+      .collectAsState(initial = null).value
     val gridMode = remember { gridModeStore.data }
       .collectAsState(initial = null).value
       ?: return BookOverviewViewState.Loading
@@ -146,11 +154,15 @@ class BookOverviewViewModel(
             .associate { book ->
               book.id to book.itemViewState(
                 currentBookId = currentBookId,
+                shared = community != null && book.id in community.shared,
                 livePlaybackState = { livePlaybackState.value },
               )
             }
         }
         .toSortedMap(),
+      community = community
+        ?.takeIf { it.books.isNotEmpty() }
+        ?.let { BookOverviewViewState.Community(name = it.name, books = it.books) },
       playButtonState = if (playState == PlayStateManager.PlayState.Playing) {
         BookOverviewViewState.PlayButtonState.Playing
       } else {
@@ -234,6 +246,7 @@ class BookOverviewViewModel(
           )
         },
       ),
+      community = null,
       playButtonState = BookOverviewViewState.PlayButtonState.Paused,
       showAddBookHint = false,
       showSearchIcon = true,
@@ -287,6 +300,14 @@ class BookOverviewViewModel(
     scope.launch {
       bookIds.forEach { repo.moveToCategory(it, category) }
     }
+  }
+
+  fun onCommunityRequest(communityBookId: String) {
+    communityLibrary?.request(communityBookId)
+  }
+
+  fun onCommunityCancelRequest(communityBookId: String) {
+    communityLibrary?.cancelRequest(communityBookId)
   }
 
   fun onBookFolderClick() {
@@ -343,20 +364,21 @@ private val FolderPickerMigrationInstallTimeCutoff = Instant.parse("2026-06-17T0
 @Composable
 private fun Book.itemViewState(
   currentBookId: BookId?,
+  shared: Boolean,
   livePlaybackState: () -> LivePlaybackState?,
 ): State<BookOverviewItemViewState> {
   if (id != currentBookId) {
-    return rememberUpdatedState(toItemViewState())
+    return rememberUpdatedState(toItemViewState(shared))
   }
   val currentPlaybackState by rememberUpdatedState(livePlaybackState)
-  return remember(this, currentBookId) {
+  return remember(this, currentBookId, shared) {
     derivedStateOf {
       val livePlayback = currentPlaybackState()
       if (livePlayback != null) {
         overlay(livePlayback)
       } else {
         this
-      }.toItemViewState()
+      }.toItemViewState(shared)
     }
   }
 }

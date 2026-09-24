@@ -14,15 +14,17 @@ data class BookOverviewItemViewState(
   val progress: Float,
   val id: BookId,
   val remainingTime: String,
+  val shared: Boolean = false,
 )
 
-internal fun Book.toItemViewState() = BookOverviewItemViewState(
+internal fun Book.toItemViewState(shared: Boolean = false) = BookOverviewItemViewState(
   name = content.name,
   author = content.author,
   cover = content.coverUrl,
   id = id,
   progress = progress(),
   remainingTime = formatTime(duration - position),
+  shared = shared,
 )
 
 private fun Book.progress(): Float {

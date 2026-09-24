@@ -2,6 +2,7 @@ package voice.features.bookOverview.views
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,8 +33,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import voice.core.data.BookId
 import voice.core.ui.sharedCoverElementModifier
+import voice.features.bookOverview.community.CommunityBook
 import voice.features.bookOverview.overview.BookOverviewCategory
 import voice.features.bookOverview.overview.BookOverviewItemViewState
+import voice.features.bookOverview.overview.BookOverviewViewState
 import voice.core.ui.R as UiR
 
 @Composable
@@ -44,6 +47,8 @@ internal fun ListBooks(
   onBookLongClick: (BookId) -> Unit,
   showPermissionBugCard: Boolean,
   onPermissionBugCardClick: () -> Unit,
+  community: BookOverviewViewState.Community?,
+  onCommunityBookClick: (CommunityBook) -> Unit,
 ) {
   LazyColumn(
     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -84,6 +89,30 @@ internal fun ListBooks(
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.systemBars))
       }
     }
+    if (community != null) {
+      stickyHeader(
+        key = "community",
+        contentType = "header",
+      ) {
+        Header(
+          modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(vertical = 8.dp, horizontal = 8.dp),
+          text = community.name,
+        )
+      }
+      items(
+        items = community.books,
+        key = { "community:${it.id}" },
+        contentType = { "communityItem" },
+      ) { book ->
+        ListCommunityBookRow(book = book, onClick = onCommunityBookClick)
+      }
+      item {
+        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.systemBars))
+      }
+    }
   }
 }
 
@@ -104,7 +133,12 @@ internal fun ListBookRow(
   ) {
     Column(Modifier.padding()) {
       Row(verticalAlignment = Alignment.CenterVertically) {
-        CoverImage(book.id, book.cover)
+        Box {
+          CoverImage(book.id, book.cover)
+          if (book.shared) {
+            SharedBadge(Modifier.align(Alignment.TopEnd))
+          }
+        }
 
         Column(
           Modifier

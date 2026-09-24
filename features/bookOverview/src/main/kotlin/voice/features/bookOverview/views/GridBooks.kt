@@ -35,8 +35,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import voice.core.data.BookId
 import voice.core.ui.sharedCoverElementModifier
+import voice.features.bookOverview.community.CommunityBook
 import voice.features.bookOverview.overview.BookOverviewCategory
 import voice.features.bookOverview.overview.BookOverviewItemViewState
+import voice.features.bookOverview.overview.BookOverviewViewState
 import kotlin.math.roundToInt
 import voice.core.ui.R as UiR
 
@@ -48,6 +50,8 @@ internal fun GridBooks(
   onBookLongClick: (BookId) -> Unit,
   showPermissionBugCard: Boolean,
   onPermissionBugCardClick: () -> Unit,
+  community: BookOverviewViewState.Community?,
+  onCommunityBookClick: (CommunityBook) -> Unit,
 ) {
   val cellCount = gridColumnCount()
   LazyVerticalGrid(
@@ -93,6 +97,30 @@ internal fun GridBooks(
         Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.systemBars))
       }
     }
+    if (community != null) {
+      item(
+        span = { GridItemSpan(maxLineSpan) },
+        key = "community",
+        contentType = "header",
+      ) {
+        Header(
+          modifier = Modifier.padding(top = 8.dp, bottom = 4.dp, start = 8.dp, end = 8.dp),
+          text = community.name,
+        )
+      }
+      items(
+        items = community.books,
+        key = { "community:${it.id}" },
+        contentType = { "communityItem" },
+      ) { book ->
+        GridCommunityBook(book = book, onClick = onCommunityBookClick)
+      }
+      item(
+        span = { GridItemSpan(maxLineSpan) },
+      ) {
+        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.systemBars))
+      }
+    }
   }
 }
 
@@ -129,6 +157,9 @@ internal fun GridBook(
           error = painterResource(id = UiR.drawable.album_art),
           contentDescription = null,
         )
+        if (book.shared) {
+          SharedBadge(Modifier.align(Alignment.TopEnd))
+        }
       }
 
       Spacer(Modifier.height(4.dp))
