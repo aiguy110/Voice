@@ -46,6 +46,7 @@ import voice.core.scanner.MediaScanTrigger
 import voice.core.search.BookSearch
 import voice.core.ui.GridCount
 import voice.features.bookOverview.di.BookOverviewScope
+import voice.features.bookOverview.editBookCategory.moveToCategory
 import voice.features.bookOverview.search.BookSearchViewState
 import voice.navigation.Destination
 import voice.navigation.Navigator
@@ -84,6 +85,7 @@ class BookOverviewViewModel(
   private var searchActive by mutableStateOf(false)
   private var query by mutableStateOf("")
   private var dialog by mutableStateOf<BookOverviewViewState.Dialog?>(null)
+  private var selection by mutableStateOf<Set<BookId>>(emptySet())
 
   fun attach() {
     mediaScanner.scan()
@@ -168,6 +170,7 @@ class BookOverviewViewModel(
         !folderPickerMovedDialogShown &&
         appInfoProvider.installTime < FolderPickerMigrationInstallTimeCutoff,
       dialog = dialog,
+      selection = selection,
     )
   }
 
@@ -244,6 +247,7 @@ class BookOverviewViewModel(
       showStoragePermissionBugCard = false,
       showFolderPickerIcon = false,
       dialog = null,
+      selection = emptySet(),
     )
   }
 
@@ -252,7 +256,37 @@ class BookOverviewViewModel(
   }
 
   fun onBookClick(id: BookId) {
-    navigator.goTo(Destination.Playback(id))
+    if (selection.isNotEmpty()) {
+      onSelectionToggle(id)
+    } else {
+      navigator.goTo(Destination.Playback(id))
+    }
+  }
+
+  fun onSelectionStart(id: BookId) {
+    selection = setOf(id)
+  }
+
+  fun onSelectionToggle(id: BookId) {
+    selection = if (id in selection) selection - id else selection + id
+  }
+
+  fun onSelectAll() {
+    scope.launch {
+      selection = repo.all().map { it.id }.toSet()
+    }
+  }
+
+  fun onSelectionClear() {
+    selection = emptySet()
+  }
+
+  fun onMoveSelectionToCategory(category: BookOverviewCategory) {
+    val bookIds = selection
+    selection = emptySet()
+    scope.launch {
+      bookIds.forEach { repo.moveToCategory(it, category) }
+    }
   }
 
   fun onBookFolderClick() {

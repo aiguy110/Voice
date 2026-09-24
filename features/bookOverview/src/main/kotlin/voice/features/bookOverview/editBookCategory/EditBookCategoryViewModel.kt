@@ -16,7 +16,7 @@ class EditBookCategoryViewModel(private val repo: BookRepository) : BottomSheetI
 
   override suspend fun items(bookId: BookId): List<BottomSheetItem> {
     val book = repo.get(bookId) ?: return emptyList()
-    return when (book.category) {
+    val categoryItems = when (book.category) {
       BookOverviewCategory.CURRENT -> listOf(
         BottomSheetItem.BookCategoryMarkAsNotStarted,
         BottomSheetItem.BookCategoryMarkAsCompleted,
@@ -30,33 +30,46 @@ class EditBookCategoryViewModel(private val repo: BookRepository) : BottomSheetI
         BottomSheetItem.BookCategoryMarkAsNotStarted,
       )
     }
+    return categoryItems + BottomSheetItem.SelectMultiple
   }
 
   override suspend fun onItemClick(
     bookId: BookId,
     item: BottomSheetItem,
   ) {
-    val book = repo.get(bookId) ?: return
-
-    val (currentChapter, positionInChapter) = when (item) {
-      BottomSheetItem.BookCategoryMarkAsCurrent -> {
-        book.chapters.first().id to 1L
-      }
-      BottomSheetItem.BookCategoryMarkAsNotStarted -> {
-        book.chapters.first().id to 0L
-      }
-      BottomSheetItem.BookCategoryMarkAsCompleted -> {
-        val lastChapter = book.chapters.last()
-        lastChapter.id to lastChapter.duration
-      }
+    val category = when (item) {
+      BottomSheetItem.BookCategoryMarkAsCurrent -> BookOverviewCategory.CURRENT
+      BottomSheetItem.BookCategoryMarkAsNotStarted -> BookOverviewCategory.NOT_STARTED
+      BottomSheetItem.BookCategoryMarkAsCompleted -> BookOverviewCategory.FINISHED
       else -> return
     }
+    repo.moveToCategory(bookId, category)
+  }
+}
 
-    repo.updateBook(book.id) {
-      it.copy(
-        currentChapter = currentChapter,
-        positionInChapter = positionInChapter,
-      )
+internal suspend fun BookRepository.moveToCategory(
+  bookId: BookId,
+  category: BookOverviewCategory,
+) {
+  val book = get(bookId) ?: return
+
+  val (currentChapter, positionInChapter) = when (category) {
+    BookOverviewCategory.CURRENT -> {
+      book.chapters.first().id to 1L
     }
+    BookOverviewCategory.NOT_STARTED -> {
+      book.chapters.first().id to 0L
+    }
+    BookOverviewCategory.FINISHED -> {
+      val lastChapter = book.chapters.last()
+      lastChapter.id to lastChapter.duration
+    }
+  }
+
+  updateBook(book.id) {
+    it.copy(
+      currentChapter = currentChapter,
+      positionInChapter = positionInChapter,
+    )
   }
 }

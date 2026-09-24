@@ -85,6 +85,7 @@ internal fun BookSearchContent(
               items(viewState.books) { book ->
                 ListBookRow(
                   book = book,
+                  selected = false,
                   onBookClick = onBookClick,
                   onBookLongClick = onBookClick,
                 )
@@ -102,6 +103,7 @@ internal fun BookSearchContent(
               items(viewState.books) { book ->
                 GridBook(
                   book = book,
+                  selected = false,
                   onBookClick = onBookClick,
                   onBookLongClick = onBookClick,
                 )

@@ -39,6 +39,7 @@ import voice.core.ui.R as UiR
 @Composable
 internal fun ListBooks(
   books: Map<BookOverviewCategory, Map<BookId, State<BookOverviewItemViewState>>>,
+  selection: Set<BookId>,
   onBookClick: (BookId) -> Unit,
   onBookLongClick: (BookId) -> Unit,
   showPermissionBugCard: Boolean,
@@ -74,6 +75,7 @@ internal fun ListBooks(
       ) { (_, bookState) ->
         ListBookRow(
           book = bookState.value,
+          selected = bookState.value.id in selection,
           onBookClick = onBookClick,
           onBookLongClick = onBookLongClick,
         )
@@ -88,12 +90,14 @@ internal fun ListBooks(
 @Composable
 internal fun ListBookRow(
   book: BookOverviewItemViewState,
+  selected: Boolean,
   onBookClick: (BookId) -> Unit,
   onBookLongClick: (BookId) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   BookCard(
     bookId = book.id,
+    selected = selected,
     onBookClick = onBookClick,
     onBookLongClick = onBookLongClick,
     modifier = modifier,
@@ -174,11 +178,21 @@ private fun CoverImage(
 @Composable
 @Preview
 private fun ListBookRowPreviewWithProgress() {
-  ListBookRow(BookOverviewPreviewParameterProvider().book().copy(progress = 0.6f), {}, {})
+  ListBookRow(
+    book = BookOverviewPreviewParameterProvider().book().copy(progress = 0.6f),
+    selected = false,
+    onBookClick = {},
+    onBookLongClick = {},
+  )
 }
 
 @Composable
 @Preview
 private fun ListBookRowPreviewWithoutProgress() {
-  ListBookRow(BookOverviewPreviewParameterProvider().book().copy(progress = 0f), {}, {})
+  ListBookRow(
+    book = BookOverviewPreviewParameterProvider().book().copy(progress = 0f),
+    selected = false,
+    onBookClick = {},
+    onBookLongClick = {},
+  )
 }

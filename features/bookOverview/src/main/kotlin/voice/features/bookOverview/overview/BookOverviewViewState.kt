@@ -18,6 +18,7 @@ data class BookOverviewViewState(
   val showStoragePermissionBugCard: Boolean,
   val showFolderPickerIcon: Boolean,
   val dialog: Dialog?,
+  val selection: Set<BookId>,
 ) {
 
   companion object {
@@ -37,6 +38,7 @@ data class BookOverviewViewState(
       showStoragePermissionBugCard = false,
       showFolderPickerIcon = true,
       dialog = null,
+      selection = emptySet(),
     )
   }
 

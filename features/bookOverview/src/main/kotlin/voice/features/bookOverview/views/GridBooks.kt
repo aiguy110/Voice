@@ -43,6 +43,7 @@ import voice.core.ui.R as UiR
 @Composable
 internal fun GridBooks(
   books: Map<BookOverviewCategory, Map<BookId, State<BookOverviewItemViewState>>>,
+  selection: Set<BookId>,
   onBookClick: (BookId) -> Unit,
   onBookLongClick: (BookId) -> Unit,
   showPermissionBugCard: Boolean,
@@ -81,6 +82,7 @@ internal fun GridBooks(
       ) { (_, bookState) ->
         GridBook(
           book = bookState.value,
+          selected = bookState.value.id in selection,
           onBookClick = onBookClick,
           onBookLongClick = onBookLongClick,
         )
@@ -97,11 +99,13 @@ internal fun GridBooks(
 @Composable
 internal fun GridBook(
   book: BookOverviewItemViewState,
+  selected: Boolean,
   onBookClick: (BookId) -> Unit,
   onBookLongClick: (BookId) -> Unit,
 ) {
   BookCard(
     bookId = book.id,
+    selected = selected,
     onBookClick = onBookClick,
     onBookLongClick = onBookLongClick,
   ) {
@@ -162,11 +166,21 @@ internal fun gridColumnCount(): Int {
 @Composable
 @Preview(widthDp = 200)
 private fun GridBookPreviewWithProgress() {
-  GridBook(BookOverviewPreviewParameterProvider().book().copy(progress = 0.66f), {}, {})
+  GridBook(
+    book = BookOverviewPreviewParameterProvider().book().copy(progress = 0.66f),
+    selected = false,
+    onBookClick = {},
+    onBookLongClick = {},
+  )
 }
 
 @Composable
 @Preview(widthDp = 200)
 private fun GridBookPreviewWithoutProgress() {
-  GridBook(BookOverviewPreviewParameterProvider().book().copy(progress = 0f), {}, {})
+  GridBook(
+    book = BookOverviewPreviewParameterProvider().book().copy(progress = 0f),
+    selected = false,
+    onBookClick = {},
+    onBookLongClick = {},
+  )
 }

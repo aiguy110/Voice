@@ -1,9 +1,11 @@
 package voice.features.bookOverview.views
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -12,20 +14,31 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import voice.core.data.BookId
 
 @Composable
 internal fun BookCard(
   bookId: BookId,
+  selected: Boolean,
   onBookClick: (BookId) -> Unit,
   onBookLongClick: (BookId) -> Unit,
   modifier: Modifier = Modifier,
   content: @Composable () -> Unit,
 ) {
+  val shape = MaterialTheme.shapes.extraLarge
   ElevatedCard(
-    shape = MaterialTheme.shapes.extraLarge,
+    shape = shape,
+    colors = if (selected) {
+      CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    } else {
+      CardDefaults.elevatedCardColors()
+    },
     modifier = modifier
       .fillMaxWidth()
+      .then(
+        if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier,
+      )
       .combinedClickable(
         onClick = { onBookClick(bookId) },
         onLongClick = { onBookLongClick(bookId) },

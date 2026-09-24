@@ -22,6 +22,15 @@
     <string name="book.edit.name.label">Name</string>
     <!-- Title for the dialog that edits a book title. -->
     <string name="book.edit.title">Edit book</string>
+    <!-- Library top-bar action that selects every book while in multi-select mode. -->
+    <string name="book.selection.action.select_all">Select All</string>
+    <!-- Bottom-sheet action that starts multi-select mode with this book selected. -->
+    <string name="book.selection.action.start">Select Multiple</string>
+    <!-- Library top-bar title in multi-select mode. -->
+    <plurals name="book.selection.count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
     <!-- Snackbar message shown after creating a bookmark. -->
     <string name="bookmark.added.snackbar">Bookmark added</string>
     <!-- Relative timestamp for a bookmark created moments ago. -->

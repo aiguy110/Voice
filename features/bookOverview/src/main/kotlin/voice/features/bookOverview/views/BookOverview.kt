@@ -1,5 +1,6 @@
 package voice.features.bookOverview.views
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -56,6 +57,7 @@ import voice.features.bookOverview.overview.BookOverviewLayoutMode
 import voice.features.bookOverview.overview.BookOverviewViewState
 import voice.features.bookOverview.search.BookSearchViewState
 import voice.features.bookOverview.views.topbar.BookOverviewTopBar
+import voice.features.bookOverview.views.topbar.SelectionTopBar
 import voice.navigation.Destination
 import voice.navigation.NavEntryProvider
 import kotlin.uuid.Uuid
@@ -107,8 +109,12 @@ fun BookOverviewScreen(modifier: Modifier = Modifier) {
     onSettingsClick = bookOverviewViewModel::onSettingsClick,
     onBookClick = bookOverviewViewModel::onBookClick,
     onBookLongClick = { bookId ->
-      bottomSheetViewModel.bookSelected(bookId)
-      showBottomSheet = true
+      if (viewState.selection.isNotEmpty()) {
+        bookOverviewViewModel.onSelectionToggle(bookId)
+      } else {
+        bottomSheetViewModel.bookSelected(bookId)
+        showBottomSheet = true
+      }
     },
     onBookFolderClick = bookOverviewViewModel::onBookFolderClick,
     onFolderPickerMovedDialogDismiss = bookOverviewViewModel::onFolderPickerMovedDialogDismiss,
@@ -117,6 +123,9 @@ fun BookOverviewScreen(modifier: Modifier = Modifier) {
     onSearchQueryChange = bookOverviewViewModel::onSearchQueryChange,
     onSearchBookClick = bookOverviewViewModel::onSearchBookClick,
     onPermissionBugCardClick = bookOverviewViewModel::onPermissionBugCardClick,
+    onSelectionClear = bookOverviewViewModel::onSelectionClear,
+    onSelectAll = bookOverviewViewModel::onSelectAll,
+    onMoveSelectionToCategory = bookOverviewViewModel::onMoveSelectionToCategory,
   )
   val deleteBookViewState = deleteBookViewModel.state.value
   if (deleteBookViewState != null) {
@@ -152,6 +161,9 @@ fun BookOverviewScreen(modifier: Modifier = Modifier) {
             if (item == BottomSheetItem.FileCover) {
               getContentLauncher.launch("image/*")
             }
+            if (item == BottomSheetItem.SelectMultiple) {
+              bottomSheetViewModel.bookId?.let(bookOverviewViewModel::onSelectionStart)
+            }
             scope.launch {
               sheetState.hide()
               bottomSheetViewModel.onItemClick(item)
@@ -180,20 +192,33 @@ internal fun BookOverview(
   onSearchQueryChange: (String) -> Unit,
   onSearchBookClick: (BookId) -> Unit,
   onPermissionBugCardClick: () -> Unit,
+  onSelectionClear: () -> Unit,
+  onSelectAll: () -> Unit,
+  onMoveSelectionToCategory: (BookOverviewCategory) -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  BackHandler(enabled = viewState.selection.isNotEmpty(), onBack = onSelectionClear)
   val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
   Scaffold(
     modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
     topBar = {
-      BookOverviewTopBar(
-        viewState = viewState,
-        onBookFolderClick = onBookFolderClick,
-        onSettingsClick = onSettingsClick,
-        onActiveChange = onSearchActiveChange,
-        onQueryChange = onSearchQueryChange,
-        onSearchBookClick = onSearchBookClick,
-      )
+      if (viewState.selection.isNotEmpty()) {
+        SelectionTopBar(
+          selectedCount = viewState.selection.size,
+          onClose = onSelectionClear,
+          onSelectAll = onSelectAll,
+          onMoveToCategory = onMoveSelectionToCategory,
+        )
+      } else {
+        BookOverviewTopBar(
+          viewState = viewState,
+          onBookFolderClick = onBookFolderClick,
+          onSettingsClick = onSettingsClick,
+          onActiveChange = onSearchActiveChange,
+          onQueryChange = onSearchQueryChange,
+          onSearchBookClick = onSearchBookClick,
+        )
+      }
     },
     floatingActionButton = {
       if (viewState.playButtonState != null) {
@@ -218,6 +243,7 @@ internal fun BookOverview(
         BookOverviewLayoutMode.List -> {
           ListBooks(
             books = viewState.books,
+            selection = viewState.selection,
             onBookClick = onBookClick,
             onBookLongClick = onBookLongClick,
             showPermissionBugCard = viewState.showStoragePermissionBugCard,
@@ -227,6 +253,7 @@ internal fun BookOverview(
         BookOverviewLayoutMode.Grid -> {
           GridBooks(
             books = viewState.books,
+            selection = viewState.selection,
             onBookClick = onBookClick,
             onBookLongClick = onBookLongClick,
             showPermissionBugCard = viewState.showStoragePermissionBugCard,
@@ -295,6 +322,9 @@ fun BookOverviewPreview(
       onSearchQueryChange = {},
       onSearchBookClick = {},
       onPermissionBugCardClick = {},
+      onSelectionClear = {},
+      onSelectAll = {},
+      onMoveSelectionToCategory = {},
     )
   }
 }
@@ -346,6 +376,7 @@ internal class BookOverviewPreviewParameterProvider : PreviewParameterProvider<B
       showStoragePermissionBugCard = false,
       showFolderPickerIcon = true,
       dialog = null,
+      selection = emptySet(),
     ),
   )
 }
