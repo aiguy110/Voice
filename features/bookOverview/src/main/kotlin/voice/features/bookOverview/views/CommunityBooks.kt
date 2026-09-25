@@ -33,8 +33,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.toUpperCase
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import voice.core.data.community.CommunityBook
 import voice.core.ui.icons.VoiceIcons
-import voice.features.bookOverview.community.CommunityBook
 import voice.core.strings.R as StringsR
 import voice.core.ui.R as UiR
 
@@ -114,9 +114,9 @@ internal fun ListCommunityBookRow(
           .padding(start = 12.dp, end = 12.dp)
           .weight(1f),
       ) {
-        if (book.author != null) {
+        book.author?.let { author ->
           Text(
-            text = book.author.toUpperCase(LocaleList.current),
+            text = author.toUpperCase(LocaleList.current),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

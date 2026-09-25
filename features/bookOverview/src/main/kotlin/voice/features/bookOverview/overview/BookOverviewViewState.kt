@@ -3,7 +3,7 @@ package voice.features.bookOverview.overview
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import voice.core.data.BookId
-import voice.features.bookOverview.community.CommunityBook
+import voice.core.data.community.CommunityBook
 import voice.features.bookOverview.search.BookSearchViewState
 
 @Immutable

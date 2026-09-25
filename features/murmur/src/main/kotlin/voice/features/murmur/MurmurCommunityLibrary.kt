@@ -12,10 +12,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import voice.core.data.BookId
+import voice.core.data.community.CommunityBook
+import voice.core.data.community.CommunityLibrary
+import voice.core.data.community.CommunityLibraryState
 import voice.core.logging.api.Logger
-import voice.features.bookOverview.community.CommunityBook
-import voice.features.bookOverview.community.CommunityLibrary
-import voice.features.bookOverview.community.CommunityLibraryState
 
 /** Shows the Murmur library in Voice's book overview, below the local categories. */
 @SingleIn(AppScope::class)

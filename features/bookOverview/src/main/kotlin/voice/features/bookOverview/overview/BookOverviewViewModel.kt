@@ -28,6 +28,7 @@ import voice.core.data.Book
 import voice.core.data.BookId
 import voice.core.data.GridMode
 import voice.core.data.KioskModeDemoData
+import voice.core.data.community.CommunityLibrary
 import voice.core.data.repo.BookContentRepo
 import voice.core.data.repo.BookRepository
 import voice.core.data.repo.internals.dao.RecentBookSearchDao
@@ -46,7 +47,6 @@ import voice.core.scanner.DeviceHasStoragePermissionBug
 import voice.core.scanner.MediaScanTrigger
 import voice.core.search.BookSearch
 import voice.core.ui.GridCount
-import voice.features.bookOverview.community.CommunityLibrary
 import voice.features.bookOverview.di.BookOverviewScope
 import voice.features.bookOverview.editBookCategory.moveToCategory
 import voice.features.bookOverview.search.BookSearchViewState
