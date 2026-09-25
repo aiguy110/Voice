@@ -3,7 +3,6 @@ package voice.features.bookOverview.views
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -18,6 +17,7 @@ import androidx.compose.material3.SheetValue.Hidden
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,8 +25,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.retain.retain
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -39,7 +41,9 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesTo
 import dev.zacsweers.metro.IntoSet
 import dev.zacsweers.metro.Provides
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import voice.core.common.rootGraphAs
 import voice.core.data.BookId
 import voice.core.data.community.CommunityBook
@@ -129,6 +133,7 @@ fun BookOverviewScreen(modifier: Modifier = Modifier) {
     onSelectAll = bookOverviewViewModel::onSelectAll,
     onMoveSelectionToCategory = bookOverviewViewModel::onMoveSelectionToCategory,
     onCommunityBookClick = { communityBook = it },
+    onRefresh = bookOverviewViewModel::onRefresh,
   )
   val deleteBookViewState = deleteBookViewModel.state.value
   if (deleteBookViewState != null) {
@@ -227,8 +232,19 @@ internal fun BookOverview(
   onSelectAll: () -> Unit,
   onMoveSelectionToCategory: (BookOverviewCategory) -> Unit,
   onCommunityBookClick: (CommunityBook) -> Unit,
+  onRefresh: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  var refreshing by remember { mutableStateOf(false) }
+  val isLoading by rememberUpdatedState(viewState.isLoading)
+  LaunchedEffect(refreshing) {
+    if (refreshing) {
+      // The scan starts asynchronously: wait for it to begin (unless it's quick), then to finish.
+      withTimeoutOrNull(1000) { snapshotFlow { isLoading }.first { it } }
+      snapshotFlow { isLoading }.first { !it }
+      refreshing = false
+    }
+  }
   BackHandler(enabled = viewState.selection.isNotEmpty(), onBack = onSelectionClear)
   val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
   Scaffold(
@@ -266,8 +282,13 @@ internal fun BookOverview(
     },
     contentWindowInsets = WindowInsets(0, 0, 0, 0),
   ) { contentPadding ->
-    Box(
-      Modifier
+    PullToRefreshBox(
+      isRefreshing = refreshing,
+      onRefresh = {
+        refreshing = true
+        onRefresh()
+      },
+      modifier = Modifier
         .padding(contentPadding)
         .consumeWindowInsets(contentPadding),
     ) {
@@ -362,6 +383,7 @@ fun BookOverviewPreview(
       onSelectAll = {},
       onMoveSelectionToCategory = {},
       onCommunityBookClick = {},
+      onRefresh = {},
     )
   }
 }

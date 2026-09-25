@@ -302,6 +302,11 @@ class BookOverviewViewModel(
     }
   }
 
+  fun onRefresh() {
+    mediaScanner.scan()
+    communityLibrary?.refresh()
+  }
+
   fun onCommunityRequest(communityBookId: String) {
     communityLibrary?.request(communityBookId)
   }
