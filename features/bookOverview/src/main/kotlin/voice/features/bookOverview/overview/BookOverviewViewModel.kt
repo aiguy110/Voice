@@ -183,6 +183,7 @@ class BookOverviewViewModel(
         appInfoProvider.installTime < FolderPickerMigrationInstallTimeCutoff,
       dialog = dialog,
       selection = selection,
+      canShareSelection = community != null,
     )
   }
 
@@ -300,6 +301,12 @@ class BookOverviewViewModel(
     scope.launch {
       bookIds.forEach { repo.moveToCategory(it, category) }
     }
+  }
+
+  fun onShareSelection() {
+    val bookIds = selection
+    selection = emptySet()
+    communityLibrary?.share(bookIds)
   }
 
   fun onRefresh() {

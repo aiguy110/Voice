@@ -29,7 +29,7 @@ class CommunityBottomSheetItemViewModel(libraries: Set<CommunityLibrary>) : Bott
     item: BottomSheetItem,
   ) {
     when (item) {
-      BottomSheetItem.ShareWithCommunity -> library?.share(bookId)
+      BottomSheetItem.ShareWithCommunity -> library?.share(setOf(bookId))
       BottomSheetItem.StopSharingWithCommunity -> library?.stopSharing(bookId)
       else -> Unit
     }

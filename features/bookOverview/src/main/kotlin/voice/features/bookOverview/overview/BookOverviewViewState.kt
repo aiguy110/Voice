@@ -21,6 +21,8 @@ data class BookOverviewViewState(
   val showFolderPickerIcon: Boolean,
   val dialog: Dialog?,
   val selection: Set<BookId>,
+  /** Whether a community library is set up, so the selection can be shared with it. */
+  val canShareSelection: Boolean = false,
 ) {
 
   companion object {

@@ -10,6 +10,7 @@ import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import voice.core.data.BookId
 import voice.core.data.community.CommunityBook
@@ -43,9 +44,26 @@ class MurmurCommunityLibrary(
 
   override fun refresh() = run(quiet = true) { repository.refreshLibrary() }
 
-  override fun share(bookId: BookId) = run {
-    toast("Preparing the book for sharing…")
-    repository.share(bookId)
+  override fun share(bookIds: Set<BookId>) = run {
+    val shared = repository.settings.first().shared.values
+    val toShare = bookIds.filter { it.value !in shared }
+    if (toShare.isEmpty()) return@run
+    toast(if (toShare.size == 1) "Preparing the book for sharing…" else "Preparing ${toShare.size} books for sharing…")
+    // One at a time: each book is read and hashed in full. A failure doesn't stop the rest.
+    val failures = toShare.mapNotNull { bookId ->
+      try {
+        repository.share(bookId)
+        null
+      } catch (e: Exception) {
+        Logger.w(e, "Murmur: sharing $bookId failed")
+        e
+      }
+    }
+    when {
+      failures.isEmpty() -> Unit
+      toShare.size == 1 -> throw failures.single()
+      else -> toast("Murmur: ${failures.size} of ${toShare.size} books couldn't be shared")
+    }
   }
 
   override fun stopSharing(bookId: BookId) = run { repository.stopSharing(bookId) }

@@ -26,6 +26,8 @@ internal fun SelectionTopBar(
   onClose: () -> Unit,
   onSelectAll: () -> Unit,
   onMoveToCategory: (BookOverviewCategory) -> Unit,
+  /** Null hides the share action. */
+  onShare: (() -> Unit)?,
 ) {
   TopAppBar(
     title = {
@@ -89,6 +91,16 @@ internal fun SelectionTopBar(
               onMoveToCategory(BookOverviewCategory.NOT_STARTED)
             },
           )
+          if (onShare != null) {
+            DropdownMenuItem(
+              text = { Text(stringResource(StringsR.string.book_community_action_share)) },
+              leadingIcon = { Icon(VoiceIcons.Share, contentDescription = null) },
+              onClick = {
+                expanded = false
+                onShare()
+              },
+            )
+          }
         }
       }
     },
@@ -104,6 +116,7 @@ private fun SelectionTopBarPreview() {
       onClose = {},
       onSelectAll = {},
       onMoveToCategory = {},
+      onShare = {},
     )
   }
 }

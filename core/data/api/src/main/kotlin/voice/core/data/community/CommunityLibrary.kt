@@ -16,7 +16,8 @@ public interface CommunityLibrary {
   /** Re-fetches the community's books. Called whenever the overview is shown. */
   public fun refresh()
 
-  public fun share(bookId: BookId)
+  /** Shares the books, skipping ones already shared. */
+  public fun share(bookIds: Set<BookId>)
 
   public fun stopSharing(bookId: BookId)
 

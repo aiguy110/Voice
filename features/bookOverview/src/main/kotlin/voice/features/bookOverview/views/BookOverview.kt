@@ -132,6 +132,7 @@ fun BookOverviewScreen(modifier: Modifier = Modifier) {
     onSelectionClear = bookOverviewViewModel::onSelectionClear,
     onSelectAll = bookOverviewViewModel::onSelectAll,
     onMoveSelectionToCategory = bookOverviewViewModel::onMoveSelectionToCategory,
+    onShareSelection = bookOverviewViewModel::onShareSelection,
     onCommunityBookClick = { communityBook = it },
     onRefresh = bookOverviewViewModel::onRefresh,
   )
@@ -231,6 +232,7 @@ internal fun BookOverview(
   onSelectionClear: () -> Unit,
   onSelectAll: () -> Unit,
   onMoveSelectionToCategory: (BookOverviewCategory) -> Unit,
+  onShareSelection: () -> Unit,
   onCommunityBookClick: (CommunityBook) -> Unit,
   onRefresh: () -> Unit,
   modifier: Modifier = Modifier,
@@ -256,6 +258,7 @@ internal fun BookOverview(
           onClose = onSelectionClear,
           onSelectAll = onSelectAll,
           onMoveToCategory = onMoveSelectionToCategory,
+          onShare = onShareSelection.takeIf { viewState.canShareSelection },
         )
       } else {
         BookOverviewTopBar(
@@ -382,6 +385,7 @@ fun BookOverviewPreview(
       onSelectionClear = {},
       onSelectAll = {},
       onMoveSelectionToCategory = {},
+      onShareSelection = {},
       onCommunityBookClick = {},
       onRefresh = {},
     )
