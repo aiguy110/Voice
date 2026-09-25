@@ -33,9 +33,11 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -43,6 +45,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import voice.core.common.rootGraphAs
 import voice.core.logging.api.Logger
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -53,10 +56,21 @@ data class MurmurRelease(
   val apkUrl: String,
 )
 
+/** Progress of downloading the [MurmurUpdater.available] release. */
+sealed interface UpdateDownload {
+  data object None : UpdateDownload
+
+  /** [fraction] is null until the size is known. */
+  data class Running(val fraction: Float?) : UpdateDownload
+
+  /** The APK is cached, so installing doesn't download it again. */
+  data object Done : UpdateDownload
+}
+
 /**
  * Keeps the Murmur build of Voice up to date from the fork's GitHub releases. [check] runs with
  * every sync; installing goes through [MurmurUpdateActivity] (which gets the install permission)
- * and [MurmurUpdateWorker] (which downloads the APK into a PackageInstaller session).
+ * and [MurmurUpdateWorker] (which downloads the APK into the cache, then hands it to a PackageInstaller session).
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -74,6 +88,12 @@ class MurmurUpdater(
   val available: StateFlow<MurmurRelease?>
     field = MutableStateFlow(null)
 
+  val download: StateFlow<UpdateDownload>
+    field = MutableStateFlow<UpdateDownload>(UpdateDownload.None)
+
+  private val scope = MainScope()
+  private val downloadDir get() = File(context.cacheDir, "murmur-update")
+
   /** Only the Murmur build updates itself, so a plain Voice install never turns into one. */
   val enabled: Boolean get() = context.packageName.endsWith(".murmur")
 
@@ -84,6 +104,7 @@ class MurmurUpdater(
     if (!enabled) return null
     val release = latest()?.takeIf { it.versionCode > installedVersion }
     available.value = release
+    syncDownload(release)
     if (release == null) {
       notificationManager()?.cancel(NOTIFICATION_ID)
     } else if (settingsStore.data.first().updateNotified < release.versionCode) {
@@ -94,8 +115,24 @@ class MurmurUpdater(
     return release
   }
 
-  /** Queues the download and install. The caller must hold the install-packages permission. */
+  /**
+   * Installs the cached APK, or queues the download and install when there isn't one. The caller must hold
+   * the install-packages permission.
+   */
   fun install() {
+    val apk = available.value?.let(::apkFile)
+    if (apk != null && apk.exists()) {
+      scope.launch {
+        try {
+          installFrom(apk)
+        } catch (e: IOException) {
+          Logger.w(e, "Murmur: installing the downloaded update failed")
+          Toast.makeText(context, "Couldn't install the update: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+      }
+      return
+    }
+    download.value = UpdateDownload.Running(null)
     val request = OneTimeWorkRequestBuilder<MurmurUpdateWorker>()
       .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
       .build()
@@ -104,7 +141,54 @@ class MurmurUpdater(
   }
 
   internal suspend fun downloadAndInstall() {
-    val release = check() ?: return
+    val release = check() ?: return downloadStopped()
+    val apk = apkFile(release)
+    if (!apk.exists()) {
+      download.value = UpdateDownload.Running(null)
+      downloadApk(release, apk)
+      download.value = UpdateDownload.Done
+    }
+    installFrom(apk)
+  }
+
+  /** Called when the worker gives up or finds nothing to download, so the UI stops showing a download. */
+  internal fun downloadStopped() {
+    download.value = UpdateDownload.None
+    syncDownload(available.value)
+  }
+
+  private suspend fun downloadApk(
+    release: MurmurRelease,
+    apk: File,
+  ) = withContext(Dispatchers.IO) {
+    apk.parentFile!!.mkdirs()
+    val part = File(apk.parentFile, "${apk.name}.part")
+    client.newCall(Request.Builder().url(release.apkUrl).build()).execute().use { response ->
+      if (!response.isSuccessful) throw IOException("APK download: HTTP ${response.code}")
+      val total = response.body.contentLength()
+      var copied = 0L
+      var percent = -1
+      part.outputStream().use { out ->
+        response.body.byteStream().use { input ->
+          val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+          while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            out.write(buffer, 0, read)
+            copied += read
+            if (total > 0 && copied * 100 / total != percent.toLong()) {
+              percent = (copied * 100 / total).toInt()
+              download.value = UpdateDownload.Running(copied.toFloat() / total)
+            }
+          }
+        }
+      }
+      if (total > 0 && copied != total) throw IOException("APK download: got $copied of $total bytes")
+    }
+    if (!part.renameTo(apk)) throw IOException("APK download: can't move it into place")
+  }
+
+  private suspend fun installFrom(apk: File) {
     val installer = context.packageManager.packageInstaller
     val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
       setAppPackageName(context.packageName)
@@ -117,12 +201,9 @@ class MurmurUpdater(
     try {
       withContext(Dispatchers.IO) {
         installer.openSession(sessionId).use { session ->
-          client.newCall(Request.Builder().url(release.apkUrl).build()).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("APK download: HTTP ${response.code}")
-            session.openWrite("murmur.apk", 0, response.body.contentLength()).use { out ->
-              response.body.byteStream().copyTo(out)
-              session.fsync(out)
-            }
+          session.openWrite("murmur.apk", 0, apk.length()).use { out ->
+            apk.inputStream().use { it.copyTo(out) }
+            session.fsync(out)
           }
           val status = PendingIntent.getBroadcast(
             context,
@@ -133,11 +214,20 @@ class MurmurUpdater(
           session.commit(status.intentSender)
         }
       }
-      Logger.i("Murmur: installing ${release.tag}")
+      Logger.i("Murmur: installing ${apk.name}")
     } catch (e: Exception) {
       installer.abandonSession(sessionId)
       throw e
     }
+  }
+
+  private fun apkFile(release: MurmurRelease) = File(downloadDir, "${release.tag}.apk")
+
+  /** Drops APKs of other releases and reflects whether [release]'s is cached, unless it's downloading. */
+  private fun syncDownload(release: MurmurRelease?) {
+    downloadDir.listFiles()?.filter { release == null || !it.name.startsWith("${release.tag}.") }?.forEach { it.delete() }
+    if (download.value is UpdateDownload.Running) return
+    download.value = if (release != null && apkFile(release).exists()) UpdateDownload.Done else UpdateDownload.None
   }
 
   private suspend fun latest(): MurmurRelease? = withContext(Dispatchers.IO) {
@@ -210,6 +300,7 @@ class MurmurUpdateWorker(
     if (runAttemptCount < 3) {
       Result.retry()
     } else {
+      rootGraphAs<MurmurGraph>().murmurUpdater.downloadStopped()
       MurmurUpdater.notify(applicationContext, "Update failed", "Tap to try again.", MurmurUpdater.updateActivityIntent(applicationContext))
       Result.failure()
     }

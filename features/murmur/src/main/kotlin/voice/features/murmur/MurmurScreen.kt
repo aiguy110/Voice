@@ -109,7 +109,6 @@ fun MurmurScreen(modifier: Modifier = Modifier) {
   ) { padding ->
     Column(Modifier.padding(padding).fillMaxSize()) {
       if (viewState.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-      viewState.update?.let { UpdateAvailableRow(it) }
       if (connected) {
         Library(viewState, viewModel)
       } else {
@@ -284,28 +283,45 @@ private fun Library(
   }
 }
 
-@Composable
-private fun UpdateAvailableRow(release: MurmurRelease) {
-  val context = LocalContext.current
-  ListItem(
-    modifier = Modifier.clickable { context.startActivity(MurmurUpdater.updateActivityIntent(context)) },
-    leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
-    supportingContent = { Text("Tap to download and install") },
-  ) { Text("Update available: ${release.tag}") }
-}
-
+/** Checks for, downloads, and installs updates, all from the same spot. */
 @Composable
 private fun VersionRow(
   viewState: MurmurViewState,
   onCheck: () -> Unit,
 ) {
   val installed = viewState.installedVersion ?: return
-  if (viewState.update != null) return
-  ListItem(
-    modifier = Modifier.clickable(onClick = onCheck),
-    leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
-    supportingContent = { Text("Tap to check for updates") },
-  ) { Text("App version murmur-$installed") }
+  val context = LocalContext.current
+  val install = { context.startActivity(MurmurUpdater.updateActivityIntent(context)) }
+  val update = viewState.update
+  val download = viewState.updateDownload
+  Column {
+    when {
+      update == null -> ListItem(
+        modifier = Modifier.clickable(onClick = onCheck),
+        leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
+        supportingContent = { Text("Tap to check for updates") },
+      ) { Text("App version murmur-$installed") }
+      download is UpdateDownload.Running -> ListItem(
+        leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
+        supportingContent = { Text("Downloading…") },
+      ) { Text("Update available: ${update.tag}") }
+      download == UpdateDownload.Done -> ListItem(
+        modifier = Modifier.clickable(onClick = install),
+        leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
+        supportingContent = { Text("Tap to install") },
+      ) { Text("Update downloaded: ${update.tag}") }
+      else -> ListItem(
+        modifier = Modifier.clickable(onClick = install),
+        leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
+        supportingContent = { Text("Tap to download and install") },
+      ) { Text("Update available: ${update.tag}") }
+    }
+    if (update != null && download is UpdateDownload.Running) {
+      val fraction = download.fraction
+      val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+      if (fraction == null) LinearProgressIndicator(modifier) else LinearProgressIndicator(progress = { fraction }, modifier = modifier)
+    }
+  }
 }
 
 @Composable

@@ -27,6 +27,7 @@ data class MurmurViewState(
   /** Null for builds that don't update themselves. */
   val installedVersion: Long?,
   val update: MurmurRelease?,
+  val updateDownload: UpdateDownload,
 )
 
 @Inject
@@ -50,6 +51,7 @@ class MurmurViewModel(
     val books by remember { bookRepository.flow() }.collectAsState(initial = emptyList())
     val library by repository.library.collectAsState()
     val update by updater.available.collectAsState()
+    val updateDownload by updater.download.collectAsState()
     val sharedVoiceIds = settings.shared.values.toSet()
     return MurmurViewState(
       connection = settings.connection,
@@ -62,6 +64,7 @@ class MurmurViewModel(
       showSharePicker = showSharePicker,
       installedVersion = updater.installedVersion.takeIf { updater.enabled },
       update = update,
+      updateDownload = updateDownload,
     )
   }
 
