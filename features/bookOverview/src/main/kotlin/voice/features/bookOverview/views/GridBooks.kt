@@ -136,6 +136,7 @@ internal fun GridBook(
     selected = selected,
     onBookClick = onBookClick,
     onBookLongClick = onBookLongClick,
+    shared = book.shared,
   ) {
     Column(
       modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp),
@@ -157,9 +158,6 @@ internal fun GridBook(
           error = painterResource(id = UiR.drawable.album_art),
           contentDescription = null,
         )
-        if (book.shared) {
-          SharedBadge(Modifier.align(Alignment.TopEnd))
-        }
       }
 
       Spacer(Modifier.height(4.dp))

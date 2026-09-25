@@ -130,19 +130,16 @@ internal fun ListBookRow(
     onBookClick = onBookClick,
     onBookLongClick = onBookLongClick,
     modifier = modifier,
+    shared = book.shared,
   ) {
     Column(Modifier.padding()) {
       Row(verticalAlignment = Alignment.CenterVertically) {
-        Box {
-          CoverImage(book.id, book.cover)
-          if (book.shared) {
-            SharedBadge(Modifier.align(Alignment.TopEnd))
-          }
-        }
+        CoverImage(book.id, book.cover)
 
         Column(
           Modifier
-            .padding(start = 12.dp)
+            // Keeps the text clear of the shared badge in the card's corner.
+            .padding(start = 12.dp, end = if (book.shared) 32.dp else 0.dp)
             .weight(1f),
         ) {
           if (book.author != null) {

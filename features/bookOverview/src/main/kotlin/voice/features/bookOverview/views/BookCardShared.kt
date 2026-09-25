@@ -3,6 +3,7 @@ package voice.features.bookOverview.views
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.CardDefaults
@@ -24,6 +25,7 @@ internal fun BookCard(
   onBookClick: (BookId) -> Unit,
   onBookLongClick: (BookId) -> Unit,
   modifier: Modifier = Modifier,
+  shared: Boolean = false,
   content: @Composable () -> Unit,
 ) {
   val shape = MaterialTheme.shapes.extraLarge
@@ -44,7 +46,12 @@ internal fun BookCard(
         onLongClick = { onBookLongClick(bookId) },
       ),
   ) {
-    content()
+    Box {
+      content()
+      if (shared) {
+        SharedBadge(Modifier.align(Alignment.TopEnd))
+      }
+    }
   }
 }
 
