@@ -30,6 +30,8 @@ data class MurmurSettings(
   val shared: Map<String, String> = emptyMap(),
   /** Murmur book id -> document uri a download is being written to. */
   val downloading: Map<String, String> = emptyMap(),
+  /** Send diagnostic reports, like the tree of a folder being added, to the server (opt-in). */
+  val reportTelemetry: Boolean = false,
   /** Highest release versionCode the user was notified about. */
   val updateNotified: Long = 0,
 ) {

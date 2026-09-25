@@ -112,6 +112,10 @@ class MurmurRepository(
     settingsStore.updateData { it.copy(keepSharing = keep) }
   }
 
+  suspend fun setReportTelemetry(report: Boolean) {
+    settingsStore.updateData { it.copy(reportTelemetry = report) }
+  }
+
   fun syncNow() = scheduler.syncNow()
 
   private suspend fun api(): MurmurApi {

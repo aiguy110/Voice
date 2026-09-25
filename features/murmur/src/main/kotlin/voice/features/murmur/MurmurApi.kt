@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -113,6 +114,11 @@ class MurmurApi(
     }
     return response
   }
+
+  /** Sends an opt-in diagnostic report; [report] must have an `event` field. */
+  suspend fun telemetry(report: JsonObject) = call(
+    request("telemetry").post(murmurJson.encodeToString(JsonObject.serializer(), report).toRequestBody(JSON)),
+  )
 
   suspend fun received(transferId: String) = call(request("transfers/$transferId/received").post(ByteArray(0).toRequestBody()))
 

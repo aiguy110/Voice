@@ -114,6 +114,8 @@ class MurmurViewModel(
 
   fun setKeepSharing(keep: Boolean) = run { repository.setKeepSharing(keep) }
 
+  fun setReportTelemetry(report: Boolean) = run { repository.setReportTelemetry(report) }
+
   fun importSabp() = run {
     val result = sabpImport.run()
     message = if (result.finished + result.inProgress == 0) {

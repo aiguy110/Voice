@@ -4,6 +4,7 @@
   mirror it exactly, and `ManifestTest` must keep the protocol's book-id test vector.
 - Keep this module self-contained so it can be offered upstream: Voice-side changes are limited to `Destination.Murmur`, the Settings
   entry, and `app` wiring.
+- `MurmurTelemetry` implements `FolderPickListener`: when the user opts in, every folder they pick to add is walked and its tree sent to `POST /telemetry`.
 - `MurmurCommunityLibrary` implements the `CommunityLibrary` seam (`core/data/api`, `voice.core.data.community`), so Murmur books show in Voice's library under
   "Murmur Community". `MurmurRepository.library` is the cached library; every sync and user action refreshes it and `MurmurCovers`
   (holders upload a 400px thumbnail when the server has none; everyone else caches covers under `filesDir/murmur/covers`).

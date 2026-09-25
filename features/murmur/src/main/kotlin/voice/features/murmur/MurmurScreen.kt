@@ -263,6 +263,14 @@ private fun Library(
     item {
       SwitchRow("Share books I receive", "Offer downloaded books to others automatically", settings.keepSharing, viewModel::setKeepSharing)
     }
+    item {
+      SwitchRow(
+        "Report app telemetry to Murmur server",
+        "Send the folder and file names of folders you add, to help diagnose library problems",
+        settings.reportTelemetry,
+        viewModel::setReportTelemetry,
+      )
+    }
     item { SabpImportRow(viewModel::importSabp) }
     item { VersionRow(viewState, viewModel::checkForUpdate) }
     item {
