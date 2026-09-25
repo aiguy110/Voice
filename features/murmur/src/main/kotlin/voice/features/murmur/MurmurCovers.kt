@@ -3,6 +3,7 @@ package voice.features.murmur
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.core.graphics.scale
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -80,7 +81,7 @@ class MurmurCovers(
         ?: return@withContext null
       val scale = THUMBNAIL_SIZE.toFloat() / max(decoded.width, decoded.height)
       val bitmap = if (scale < 1) {
-        Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt(), (decoded.height * scale).toInt(), true)
+        decoded.scale((decoded.width * scale).toInt(), (decoded.height * scale).toInt())
       } else {
         decoded
       }

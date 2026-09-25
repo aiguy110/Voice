@@ -1,6 +1,8 @@
 package voice.features.murmur
 
+import android.Manifest
 import android.net.Uri
+import android.os.Build
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -71,6 +73,13 @@ fun MurmurScreen(modifier: Modifier = Modifier) {
   LaunchedEffect(connected) {
     if (connected) viewModel.refresh()
   }
+  val requestNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+  LaunchedEffect(Unit) {
+    // Update notifications need this; Voice itself only posts the exempt media notification.
+    if (Build.VERSION.SDK_INT >= 33 && viewState.installedVersion != null) {
+      requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+  }
   Scaffold(
     modifier = modifier,
     topBar = {
@@ -100,11 +109,13 @@ fun MurmurScreen(modifier: Modifier = Modifier) {
   ) { padding ->
     Column(Modifier.padding(padding).fillMaxSize()) {
       if (viewState.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+      viewState.update?.let { UpdateAvailableRow(it) }
       if (connected) {
         Library(viewState, viewModel)
       } else {
         JoinForm(viewState.settings.serverUrl, viewModel::join)
         SabpImportRow(viewModel::importSabp)
+        VersionRow(viewState, viewModel::checkForUpdate)
       }
     }
   }
@@ -121,7 +132,7 @@ fun MurmurScreen(modifier: Modifier = Modifier) {
     AlertDialog(
       onDismissRequest = viewModel::dismissMessage,
       confirmButton = { TextButton(onClick = viewModel::dismissMessage) { Text("OK") } },
-      title = { Text("Smart AudioBook Player") },
+      title = { Text("Murmur") },
       text = { Text(message) },
     )
   }
@@ -253,6 +264,7 @@ private fun Library(
       SwitchRow("Share books I receive", "Offer downloaded books to others automatically", settings.keepSharing, viewModel::setKeepSharing)
     }
     item { SabpImportRow(viewModel::importSabp) }
+    item { VersionRow(viewState, viewModel::checkForUpdate) }
     item {
       ListItem(
         modifier = Modifier.clickable { confirmLeave = true },
@@ -262,6 +274,30 @@ private fun Library(
     }
     item { Spacer(Modifier.padding(40.dp)) }
   }
+}
+
+@Composable
+private fun UpdateAvailableRow(release: MurmurRelease) {
+  val context = LocalContext.current
+  ListItem(
+    modifier = Modifier.clickable { context.startActivity(MurmurUpdater.updateActivityIntent(context)) },
+    leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
+    supportingContent = { Text("Tap to download and install") },
+  ) { Text("Update available: ${release.tag}") }
+}
+
+@Composable
+private fun VersionRow(
+  viewState: MurmurViewState,
+  onCheck: () -> Unit,
+) {
+  val installed = viewState.installedVersion ?: return
+  if (viewState.update != null) return
+  ListItem(
+    modifier = Modifier.clickable(onClick = onCheck),
+    leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
+    supportingContent = { Text("Tap to check for updates") },
+  ) { Text("App version murmur-$installed") }
 }
 
 @Composable

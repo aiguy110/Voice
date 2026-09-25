@@ -24,6 +24,9 @@ data class MurmurViewState(
   val error: String?,
   val message: String?,
   val showSharePicker: Boolean,
+  /** Null for builds that don't update themselves. */
+  val installedVersion: Long?,
+  val update: MurmurRelease?,
 )
 
 @Inject
@@ -32,6 +35,7 @@ class MurmurViewModel(
   private val bookRepository: BookRepository,
   private val navigator: Navigator,
   private val sabpImport: SabpImport,
+  private val updater: MurmurUpdater,
 ) {
 
   private val scope = MainScope()
@@ -45,6 +49,7 @@ class MurmurViewModel(
     val settings by remember { repository.settings }.collectAsState(initial = MurmurSettings())
     val books by remember { bookRepository.flow() }.collectAsState(initial = emptyList())
     val library by repository.library.collectAsState()
+    val update by updater.available.collectAsState()
     val sharedVoiceIds = settings.shared.values.toSet()
     return MurmurViewState(
       connection = settings.connection,
@@ -55,6 +60,8 @@ class MurmurViewModel(
       error = error,
       message = message,
       showSharePicker = showSharePicker,
+      installedVersion = updater.installedVersion.takeIf { updater.enabled },
+      update = update,
     )
   }
 
@@ -114,6 +121,10 @@ class MurmurViewModel(
     } else {
       "Imported ${result.finished} finished and ${result.inProgress} in-progress books from Smart AudioBook Player."
     }
+  }
+
+  fun checkForUpdate() = run {
+    if (updater.check() == null) message = "You have the latest version."
   }
 
   fun dismissError() {

@@ -30,6 +30,8 @@ data class MurmurSettings(
   val shared: Map<String, String> = emptyMap(),
   /** Murmur book id -> document uri a download is being written to. */
   val downloading: Map<String, String> = emptyMap(),
+  /** Highest release versionCode the user was notified about. */
+  val updateNotified: Long = 0,
 ) {
   val connection: Connection?
     get() = if (serverUrl != null && token != null && username != null) Connection(serverUrl, token, username) else null

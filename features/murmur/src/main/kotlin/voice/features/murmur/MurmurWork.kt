@@ -25,11 +25,13 @@ import java.util.concurrent.TimeUnit
 interface MurmurGraph {
   val murmurSync: MurmurSync
   val murmurViewModel: MurmurViewModel
+  val murmurUpdater: MurmurUpdater
 }
 
 /**
  * Runs [MurmurSync] in the background. There is no push channel, so the server
  * is polled every 15 minutes (WorkManager's minimum) and whenever the user acts.
+ * Each run also checks GitHub for a newer app release.
  */
 class MurmurSyncWorker(
   context: Context,
@@ -37,7 +39,13 @@ class MurmurSyncWorker(
 ) : CoroutineWorker(context, params) {
 
   override suspend fun doWork(): Result = try {
-    rootGraphAs<MurmurGraph>().murmurSync.sync()
+    val graph = rootGraphAs<MurmurGraph>()
+    try {
+      val _ = graph.murmurUpdater.check()
+    } catch (e: Exception) {
+      Logger.w(e, "Murmur: update check failed")
+    }
+    graph.murmurSync.sync()
     Result.success()
   } catch (e: IOException) {
     Logger.w(e, "Murmur sync failed")

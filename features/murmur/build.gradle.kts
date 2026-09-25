@@ -5,6 +5,11 @@ plugins {
   alias(libs.plugins.metro)
 }
 
+android {
+  androidResources {
+    enable = true
+  }
+}
 
 dependencies {
   implementation(projects.core.common)
@@ -14,7 +19,6 @@ dependencies {
   implementation(projects.core.logging.api)
   implementation(projects.core.scanner)
   implementation(projects.core.ui)
-  implementation(projects.features.bookOverview)
   implementation(projects.navigation)
 
   implementation(libs.datastore)

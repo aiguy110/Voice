@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+  <!-- Self-updates from the fork's GitHub releases (MurmurUpdater). -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
   <!-- Murmur servers are reached over a private network (e.g. Tailscale, which already encrypts traffic), usually as plain http. -->
-  <application android:usesCleartextTraffic="true" />
+  <application android:usesCleartextTraffic="true">
+    <activity
+      android:name="voice.features.murmur.MurmurUpdateActivity"
+      android:excludeFromRecents="true"
+      android:exported="false"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+    <receiver
+      android:name="voice.features.murmur.MurmurInstallReceiver"
+      android:exported="false" />
+  </application>
 </manifest>
