@@ -37,7 +37,7 @@ class MurmurRepository(
     serverUrl: String,
     username: String,
   ) {
-    val url = serverUrl.trim().trimEnd('/')
+    val url = serverUrl.trim().trimEnd('/').let { if ("://" in it) it else "https://$it" }
     val registered = MurmurApi(url, token = null).register(username.trim())
     settingsStore.updateData {
       it.copy(serverUrl = url, username = registered.username, token = registered.token, shared = emptyMap(), downloading = emptyMap())

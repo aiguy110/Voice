@@ -153,7 +153,7 @@ private fun JoinForm(
   savedServerUrl: String?,
   onJoin: (serverUrl: String, username: String) -> Unit,
 ) {
-  var serverUrl by remember { mutableStateOf(savedServerUrl ?: "http://") }
+  var serverUrl by remember { mutableStateOf(savedServerUrl.orEmpty()) }
   var username by remember { mutableStateOf("") }
   Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text(
