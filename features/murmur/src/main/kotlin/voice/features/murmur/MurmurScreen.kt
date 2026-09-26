@@ -3,7 +3,6 @@ package voice.features.murmur
 import android.Manifest
 import android.net.Uri
 import android.os.Build
-import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -19,13 +18,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -197,7 +193,6 @@ private fun Library(
   viewState: MurmurViewState,
   viewModel: MurmurViewModel,
 ) {
-  val context = LocalContext.current
   val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
     if (uri != null) viewModel.setDownloadFolder(uri)
   }
@@ -218,35 +213,6 @@ private fun Library(
     )
   }
   LazyColumn(Modifier.fillMaxSize()) {
-    if (viewState.library.isEmpty()) {
-      item { ListItem { Text("Nobody has shared a book yet.") } }
-    }
-    items(viewState.library, key = { it.id }) { book ->
-      ListItem(
-        supportingContent = {
-          Column {
-            if (book.author.isNotBlank()) Text(book.author)
-            Text(
-              buildString {
-                append(Formatter.formatShortFileSize(context, book.size))
-                if (book.holders.isNotEmpty()) append(" · held by ${book.holders.joinToString()}")
-                if (book.wanters.isNotEmpty()) append(" · wanted by ${book.wanters.joinToString()}")
-              },
-              style = MaterialTheme.typography.bodySmall,
-            )
-          }
-        },
-        trailingContent = {
-          when {
-            book.holding -> OutlinedButton(onClick = { viewModel.stopSharing(book) }) { Text("Unshare") }
-            book.wanting -> OutlinedButton(onClick = { viewModel.cancelRequest(book) }) { Text("Cancel") }
-            else -> Button(onClick = { viewModel.request(book) }) { Text("Request") }
-          }
-        },
-      ) { Text(book.title) }
-    }
-
-    item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
     item {
       ListItem(
         modifier = Modifier.clickable { pickFolder.launch(null) },

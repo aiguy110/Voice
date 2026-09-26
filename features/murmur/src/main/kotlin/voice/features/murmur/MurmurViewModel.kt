@@ -18,7 +18,6 @@ import voice.navigation.Navigator
 data class MurmurViewState(
   val connection: MurmurSettings.Connection?,
   val settings: MurmurSettings,
-  val library: List<LibraryBook>,
   val shareableBooks: List<Book>,
   val busy: Boolean,
   val error: String?,
@@ -49,14 +48,12 @@ class MurmurViewModel(
   fun viewState(): MurmurViewState {
     val settings by remember { repository.settings }.collectAsState(initial = MurmurSettings())
     val books by remember { bookRepository.flow() }.collectAsState(initial = emptyList())
-    val library by repository.library.collectAsState()
     val update by updater.available.collectAsState()
     val updateDownload by updater.download.collectAsState()
     val sharedVoiceIds = settings.shared.values.toSet()
     return MurmurViewState(
       connection = settings.connection,
       settings = settings,
-      library = library,
       shareableBooks = books.filter { it.content.isActive && it.id.value !in sharedVoiceIds },
       busy = busy,
       error = error,
@@ -97,18 +94,6 @@ class MurmurViewModel(
   fun share(book: Book) = run {
     showSharePicker = false
     repository.share(book)
-  }
-
-  fun stopSharing(book: LibraryBook) = run {
-    repository.stopSharing(book.id)
-  }
-
-  fun request(book: LibraryBook) = run {
-    repository.request(book.id)
-  }
-
-  fun cancelRequest(book: LibraryBook) = run {
-    repository.cancelRequest(book.id)
   }
 
   fun setDownloadFolder(uri: Uri) = run { repository.setDownloadFolder(uri) }
