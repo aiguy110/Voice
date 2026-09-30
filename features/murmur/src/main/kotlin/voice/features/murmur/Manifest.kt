@@ -28,7 +28,7 @@ fun bookId(files: List<ManifestFile>): String {
 internal fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
 // The protocol sorts paths bytewise on UTF-8, which differs from String's UTF-16 order for some characters.
-private object Utf8Comparator : Comparator<String> {
+internal object Utf8Comparator : Comparator<String> {
   override fun compare(
     a: String,
     b: String,

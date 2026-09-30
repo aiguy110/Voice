@@ -8,12 +8,24 @@
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-  <!-- Magnet imports download in a foreground service (MagnetImportWorker). -->
+  <!-- BitTorrent reads and writes books by file path (StorageAccess). -->
+  <uses-permission
+    android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+    tools:ignore="ScopedStorage" />
+  <uses-permission
+    android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="29"
+    tools:ignore="ScopedStorage" />
+
+  <!-- Downloads and seeding run in a foreground service (TorrentWorker). -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
   <!-- Murmur servers are reached over a private network (e.g. Tailscale, which already encrypts traffic), usually as plain http. -->
-  <application android:usesCleartextTraffic="true">
+  <!-- Android 10 needs legacy storage for path access; later versions use MANAGE_EXTERNAL_STORAGE. -->
+  <application
+    android:requestLegacyExternalStorage="true"
+    android:usesCleartextTraffic="true">
     <activity
       android:name="voice.features.murmur.MurmurUpdateActivity"
       android:excludeFromRecents="true"

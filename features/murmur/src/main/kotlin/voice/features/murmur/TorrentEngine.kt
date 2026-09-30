@@ -14,16 +14,19 @@ import org.libtorrent4j.SessionManager
 import org.libtorrent4j.SessionParams
 import org.libtorrent4j.SettingsPack
 import org.libtorrent4j.Sha1Hash
+import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.TorrentInfo
 import org.libtorrent4j.swig.error_code
+import org.libtorrent4j.swig.int_string_map
 import voice.core.logging.api.Logger
 import java.io.File
 import java.io.IOException
 
 /**
- * The app's one libtorrent session. It runs only while a magnet lookup or an
- * import needs it, so an idle app holds no sockets and uses no battery.
+ * The app's one libtorrent session. It runs only while a magnet lookup or
+ * [MurmurTorrents] needs it, so an idle app holds no sockets and uses no battery.
+ * It listens on [PORT], which Murmur members open to each other.
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -67,21 +70,34 @@ class TorrentEngine(private val context: Context) {
   }
 
   /**
-   * Adds a torrent, downloading only [wanted] files into [saveDir]. The magnet's
-   * trackers and peer hints (`tr=`, `x.pe=`) are kept, since they found it before.
+   * Adds a torrent with its files under [saveDir], or at [paths] (absolute, by
+   * file index) where given. Only [wanted] files are downloaded, if set. A
+   * [magnet]'s trackers and peer hints (`tr=`, `x.pe=`) are kept, since they
+   * found it before. [seed] trusts the files to be complete and checks each
+   * piece only as it's uploaded.
    */
   fun add(
     session: SessionManager,
-    magnet: String,
     torrent: ByteArray,
-    wanted: Set<Int>,
     saveDir: File,
+    magnet: String? = null,
+    wanted: Set<Int>? = null,
+    paths: Map<Int, String> = emptyMap(),
+    seed: Boolean = false,
   ): TorrentHandle {
     val info = TorrentInfo(torrent)
-    val params = AddTorrentParams.parseMagnetUri(magnet)
+    val params = magnet?.let(AddTorrentParams::parseMagnetUri) ?: AddTorrentParams()
     params.setTorrentInfo(info)
     params.setSavePath(saveDir.absolutePath)
-    params.filePriorities(Array(info.files().numFiles()) { if (it in wanted) Priority.DEFAULT else Priority.IGNORE })
+    if (wanted != null) {
+      params.filePriorities(Array(info.files().numFiles()) { if (it in wanted) Priority.DEFAULT else Priority.IGNORE })
+    }
+    if (paths.isNotEmpty()) {
+      val renamed = int_string_map()
+      paths.forEach { (index, path) -> renamed[index] = path }
+      params.swig().set_renamed_files(renamed)
+    }
+    if (seed) params.setFlags(params.getFlags().or_(TorrentFlags.SEED_MODE))
     val error = error_code()
     val handle = session.swig().add_torrent(params.swig(), error)
     if (error.value() != 0) throw IOException("could not add torrent: ${error.message()}")
@@ -95,8 +111,11 @@ class TorrentEngine(private val context: Context) {
 
   private fun start(): SessionManager {
     val settings = SettingsPack()
+      .listenInterfaces("0.0.0.0:$PORT,[::]:$PORT")
       .activeDownloads(4)
-      .connectionsLimit(100)
+      .activeSeeds(1000)
+      .activeLimit(1000)
+      .connectionsLimit(200)
     settings.setEnableDht(true)
     return SessionManager(false).apply {
       start(SessionParams(settings))
@@ -104,7 +123,9 @@ class TorrentEngine(private val context: Context) {
     }
   }
 
-  private companion object {
-    const val METADATA_TIMEOUT_SECONDS = 120
+  companion object {
+    /** The BitTorrent port, TCP and UDP. */
+    const val PORT = 42070
+    private const val METADATA_TIMEOUT_SECONDS = 120
   }
 }

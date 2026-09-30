@@ -10,7 +10,6 @@ import voice.core.data.isAudioFile
 import voice.core.documentfile.CachedDocumentFile
 import voice.core.documentfile.CachedDocumentFileFactory
 import java.io.IOException
-import java.security.MessageDigest
 import java.text.Normalizer
 
 /** An audio file of a local Voice book, addressed by its Murmur manifest path. */
@@ -41,22 +40,12 @@ class LocalBookFiles(
     }
   }
 
-  suspend fun manifest(files: List<LocalFile>): List<ManifestFile> = withContext(Dispatchers.IO) {
-    files.map { ManifestFile(it.path, it.size, sha256(it.uri)) }
-  }
-
-  suspend fun sha256(uri: Uri): String = withContext(Dispatchers.IO) {
-    val digest = MessageDigest.getInstance("SHA-256")
-    val input = context.contentResolver.openInputStream(uri) ?: throw IOException("cannot open $uri")
-    input.use {
-      val buffer = ByteArray(DEFAULT_BUFFER_SIZE * 16)
-      while (true) {
-        val read = it.read(buffer)
-        if (read < 0) break
-        digest.update(buffer, 0, read)
-      }
+  /** Reads every file once: the manifest, and the book torrent's piece hashes. */
+  suspend fun describe(files: List<LocalFile>): Pair<List<ManifestFile>, ByteArray> = withContext(Dispatchers.IO) {
+    val byPath = files.associateBy { it.path }
+    BookTorrent.describe(byPath.mapValues { it.value.size }) { path ->
+      context.contentResolver.openInputStream(byPath.getValue(path).uri) ?: throw IOException("cannot open $path")
     }
-    digest.digest().toHex()
   }
 
   private fun MutableList<LocalFile>.collect(

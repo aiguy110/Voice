@@ -110,6 +110,10 @@ class MurmurViewModel(
 
   fun setKeepSharing(keep: Boolean) = run { repository.setKeepSharing(keep) }
 
+  fun setSeedOnWifi(seed: Boolean) = run { repository.setSeedOnWifi(seed) }
+
+  fun setSeedOnlyCharging(onlyCharging: Boolean) = run { repository.setSeedOnlyCharging(onlyCharging) }
+
   fun setReportTelemetry(report: Boolean) = run { repository.setReportTelemetry(report) }
 
   fun importSabp() = run {

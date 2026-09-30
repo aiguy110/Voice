@@ -25,6 +25,7 @@ class MurmurRepository(
   private val scheduler: MurmurScheduler,
   private val covers: MurmurCovers,
   private val bookRepository: BookRepository,
+  private val bookTorrents: BookTorrents,
 ) {
 
   val settings: Flow<MurmurSettings> = settingsStore.data
@@ -40,15 +41,17 @@ class MurmurRepository(
     val url = serverUrl.trim().trimEnd('/').let { if ("://" in it) it else "https://$it" }
     val registered = MurmurApi(url, token = null).register(username.trim())
     settingsStore.updateData {
-      it.copy(serverUrl = url, username = registered.username, token = registered.token, shared = emptyMap(), downloading = emptyMap())
+      it.copy(serverUrl = url, username = registered.username, token = registered.token, shared = emptyMap())
     }
+    bookTorrents.clear()
     refreshLibrary()
   }
 
   suspend fun leave() {
     settingsStore.updateData {
-      it.copy(serverUrl = null, username = null, token = null, shared = emptyMap(), downloading = emptyMap())
+      it.copy(serverUrl = null, username = null, token = null, shared = emptyMap())
     }
+    bookTorrents.clear()
     library.value = emptyList()
   }
 
@@ -60,13 +63,27 @@ class MurmurRepository(
     covers.sync(api, books, settingsStore.data.first().shared)
   }
 
+  /** Hashes the book, tells the server, and starts seeding it if someone's waiting. */
   suspend fun share(book: Book) {
     val files = localBookFiles.files(book.id)
     require(files.isNotEmpty()) { "No audio files found for ${book.content.name}" }
-    val manifest = localBookFiles.manifest(files)
-    val id = api().share(book.content.name, book.content.author, manifest)
+    val (manifest, pieces) = localBookFiles.describe(files)
+    val id = api().share(book.content.name, book.content.author, manifest, pieces, source(book.id, manifest)).id
     settingsStore.updateData { it.copy(shared = it.shared + (id to book.id.value)) }
     refreshLibrary()
+    scheduler.torrentsNow()
+  }
+
+  /** The public torrent a book was imported from, if it was, mapped onto its manifest. */
+  private suspend fun source(
+    bookId: BookId,
+    manifest: List<ManifestFile>,
+  ): Source? {
+    val path = StorageAccess.file(bookId.toUri())?.absolutePath ?: return null
+    val imported = settingsStore.data.first().imported[path] ?: return null
+    val paths = manifest.mapTo(mutableSetOf()) { it.path }
+    val files = imported.files.filterValues { it in paths }.map { (index, path) -> SourceFile(index, path) }
+    return Source(imported.magnet, files).takeIf { files.size == paths.size }
   }
 
   suspend fun share(bookId: BookId) {
@@ -88,8 +105,8 @@ class MurmurRepository(
 
   suspend fun request(murmurBookId: String) {
     api().want(murmurBookId)
-    scheduler.syncNow()
     refreshLibrary()
+    scheduler.torrentsNow()
   }
 
   suspend fun cancelRequest(murmurBookId: String) {
@@ -106,6 +123,16 @@ class MurmurRepository(
   suspend fun setAllowMetered(allow: Boolean) {
     settingsStore.updateData { it.copy(allowMetered = allow) }
     if (allow) scheduler.syncNow()
+  }
+
+  suspend fun setSeedOnWifi(seed: Boolean) {
+    settingsStore.updateData { it.copy(seedOnWifi = seed) }
+    if (seed) scheduler.syncNow()
+  }
+
+  suspend fun setSeedOnlyCharging(onlyCharging: Boolean) {
+    settingsStore.updateData { it.copy(seedOnlyCharging = onlyCharging) }
+    scheduler.syncNow()
   }
 
   suspend fun setKeepSharing(keep: Boolean) {

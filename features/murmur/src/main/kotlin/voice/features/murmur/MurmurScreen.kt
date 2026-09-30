@@ -168,7 +168,7 @@ private fun JoinForm(
   Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text(
       "Murmur shares audiobooks with a small community. Books you share stay on your phone; " +
-        "when someone asks for one, your phone sends it through the community server. " +
+        "when someone asks for one, your phone sends it to them over BitTorrent, and the community server keeps a copy. " +
         "Already have a username here? Enter it to get your account back.",
     )
     OutlinedTextField(
@@ -217,6 +217,7 @@ private fun Library(
     )
   }
   LazyColumn(Modifier.fillMaxSize()) {
+    item { FileAccessRow() }
     item {
       ListItem(
         modifier = Modifier.clickable { pickFolder.launch(null) },
@@ -244,6 +245,19 @@ private fun Library(
     }
     item {
       SwitchRow(
+        "Seed on Wi-Fi",
+        "Keep your shared and imported books available to others. Books someone is waiting for are always sent.",
+        settings.seedOnWifi,
+        viewModel::setSeedOnWifi,
+      )
+    }
+    if (settings.seedOnWifi) {
+      item {
+        SwitchRow("Only while charging", "Seed only while the phone is charging", settings.seedOnlyCharging, viewModel::setSeedOnlyCharging)
+      }
+    }
+    item {
+      SwitchRow(
         "Report app telemetry to Murmur server",
         "Send the folder and file names of folders you add, to help diagnose library problems",
         settings.reportTelemetry,
@@ -261,6 +275,28 @@ private fun Library(
     }
     item { Spacer(Modifier.padding(40.dp)) }
   }
+}
+
+/** BitTorrent reads and writes books by path, which needs all files access (the storage permission before Android 11). */
+@Composable
+private fun FileAccessRow() {
+  val context = LocalContext.current
+  var granted by remember { mutableStateOf(StorageAccess.granted(context)) }
+  val openSettings = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    granted = StorageAccess.granted(context)
+  }
+  val requestPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+    granted = StorageAccess.granted(context)
+  }
+  if (granted) return
+  ListItem(
+    modifier = Modifier.clickable {
+      val intent = StorageAccess.settingsIntent(context)
+      if (intent != null) openSettings.launch(intent) else requestPermission.launch(StorageAccess.LEGACY_PERMISSION)
+    },
+    leadingContent = { Icon(VoiceIcons.Folder, contentDescription = null) },
+    supportingContent = { Text("Needed to download and share books. Tap to allow.") },
+  ) { Text("Allow file access") }
 }
 
 @Composable

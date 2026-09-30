@@ -36,6 +36,7 @@ interface MurmurGraph {
   val murmurViewModel: MurmurViewModel
   val murmurUpdater: MurmurUpdater
   val magnetImports: MagnetImports
+  val murmurTorrents: MurmurTorrents
   val murmurScheduler: MurmurScheduler
 }
 
@@ -56,9 +57,8 @@ class MurmurSyncWorker(
     } catch (e: Exception) {
       Logger.w(e, "Murmur: update check failed")
     }
+    // Also restarts transfers interrupted by a reboot or the system's foreground-service limits.
     graph.murmurSync.sync()
-    // Imports interrupted by a reboot or the system's foreground-service limits pick up again here.
-    graph.murmurScheduler.importNow()
     Result.success()
   } catch (e: IOException) {
     Logger.w(e, "Murmur sync failed")
@@ -67,22 +67,23 @@ class MurmurSyncWorker(
 }
 
 /**
- * Downloads magnet imports in a foreground service, since a torrent can take hours.
- * Stopping it (a reboot, the system's data-sync limits) loses nothing: libtorrent
- * rechecks what's on disk when the next run adds the torrent again.
+ * Runs [MurmurTorrents] in a foreground service, since a download can take hours
+ * and seeding goes on while there's something to seed. Stopping it (a reboot, the
+ * system's data-sync limits) loses nothing: the next sync starts it again, and
+ * libtorrent rechecks what's on disk.
  */
-class MagnetImportWorker(
+class TorrentWorker(
   context: Context,
   params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
 
   override suspend fun doWork(): Result {
-    val imports = rootGraphAs<MurmurGraph>().magnetImports
+    val torrents = rootGraphAs<MurmurGraph>().murmurTorrents
     return try {
-      imports.run { status -> foreground(status) }
+      torrents.run { status -> foreground(status) }
       Result.success()
     } catch (e: IOException) {
-      Logger.w(e, "Murmur: magnet import failed")
+      Logger.w(e, "Murmur: transfers failed")
       Result.retry()
     }
   }
@@ -94,16 +95,16 @@ class MagnetImportWorker(
       setForeground(foregroundInfo(status))
     } catch (e: IllegalStateException) {
       // Started from the background, where Android no longer allows foreground services; carry on without.
-      Logger.w(e, "Murmur: magnet import running without a notification")
+      Logger.w(e, "Murmur: transfers running without a notification")
     }
   }
 
   private fun foregroundInfo(status: String): ForegroundInfo {
     val manager = applicationContext.getSystemService<NotificationManager>()
-    manager?.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Magnet imports", NotificationManager.IMPORTANCE_LOW))
+    manager?.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Book transfers", NotificationManager.IMPORTANCE_LOW))
     val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
       .setSmallIcon(R.drawable.murmur_update)
-      .setContentTitle("Importing audiobooks")
+      .setContentTitle("Murmur")
       .setContentText(status)
       .setOngoing(true)
       .setOnlyAlertOnce(true)
@@ -116,7 +117,7 @@ class MagnetImportWorker(
   }
 
   private companion object {
-    const val CHANNEL_ID = "murmur_imports"
+    const val CHANNEL_ID = "murmur_transfers"
     const val NOTIFICATION_ID = 0x6d76
   }
 }
@@ -143,15 +144,14 @@ class MurmurScheduler(
     WorkManager.getInstance(context).enqueueUniqueWork("murmur-sync-now", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
   }
 
-  /** Starts downloading pending magnet imports, unless that's already happening. */
-  suspend fun importNow() {
+  /** Starts downloading and seeding, unless that's already happening. */
+  suspend fun torrentsNow() {
     val settings = settingsStore.data.first()
-    if (settings.imports.isEmpty()) return
     val network = if (settings.allowMetered) NetworkType.CONNECTED else NetworkType.UNMETERED
-    val request = OneTimeWorkRequestBuilder<MagnetImportWorker>()
+    val request = OneTimeWorkRequestBuilder<TorrentWorker>()
       .setConstraints(Constraints.Builder().setRequiredNetworkType(network).build())
       .build()
-    WorkManager.getInstance(context).enqueueUniqueWork("murmur-magnet-imports", ExistingWorkPolicy.KEEP, request)
+    WorkManager.getInstance(context).enqueueUniqueWork("murmur-torrents", ExistingWorkPolicy.KEEP, request)
   }
 }
 

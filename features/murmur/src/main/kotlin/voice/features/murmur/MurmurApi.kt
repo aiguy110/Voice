@@ -10,14 +10,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 /**
- * Typed client for the Murmur protocol, v1. Every call maps 1:1 onto an endpoint
+ * Typed client for the Murmur protocol, v2. Every call maps 1:1 onto an endpoint
  * in docs/protocol.md of the Murmur server repo; keep the two in sync.
  */
 class MurmurApi(
@@ -26,7 +26,7 @@ class MurmurApi(
   private val client: OkHttpClient = defaultClient,
 ) {
 
-  private val base: HttpUrl = serverUrl.trimEnd('/').plus("/v1/").toHttpUrl()
+  private val base: HttpUrl = serverUrl.trimEnd('/').plus("/v2/").toHttpUrl()
 
   suspend fun register(username: String): RegisterResponse = call(
     post("register", RegisterRequest(username), RegisterRequest.serializer()),
@@ -41,10 +41,16 @@ class MurmurApi(
     title: String,
     author: String?,
     manifest: List<ManifestFile>,
-  ): String = call(
-    post("books", ShareRequest(title, author.orEmpty(), manifest), ShareRequest.serializer()),
+    pieces: ByteArray,
+    source: Source? = null,
+  ): ShareResponse = call(
+    post(
+      "books",
+      ShareRequest(title, author.orEmpty(), manifest, Base64.getEncoder().encodeToString(pieces), source),
+      ShareRequest.serializer(),
+    ),
     ShareResponse.serializer(),
-  ).id
+  )
 
   suspend fun unshare(bookId: String) = call(request("books/$bookId/holding").delete())
 
@@ -64,63 +70,28 @@ class MurmurApi(
     withContext(Dispatchers.IO) { it.body.bytes() }
   }
 
-  suspend fun uploads(): List<Upload> = call(get("me/uploads"), UploadsResponse.serializer()).uploads
-
-  suspend fun downloads(): List<Download> = call(get("me/downloads"), DownloadsResponse.serializer()).downloads
-
-  suspend fun uploadOffset(
-    transferId: String,
-    index: Int,
-  ): Long {
-    val response = execute(request("transfers/$transferId/files/$index").head().build())
-    response.use {
-      if (!it.isSuccessful) throw it.toException()
-      return it.header(UPLOAD_OFFSET)?.toLongOrNull() ?: throw IOException("missing $UPLOAD_OFFSET")
-    }
+  /** The book's .torrent, whose tracker URL is private to this user; null if the server doesn't know it yet. */
+  suspend fun torrent(bookId: String): ByteArray? = execute(get("books/$bookId/torrent")).use {
+    if (it.code == 404) return null
+    if (!it.isSuccessful) throw it.toException()
+    withContext(Dispatchers.IO) { it.body.bytes() }
   }
 
-  /** Returns the server's new offset. */
-  suspend fun upload(
-    transferId: String,
-    index: Int,
-    offset: Long,
-    body: RequestBody,
-  ): Long {
-    val request = request("transfers/$transferId/files/$index")
-      .header(UPLOAD_OFFSET, offset.toString())
-      .patch(body)
-      .build()
-    execute(request).use {
-      if (!it.isSuccessful) throw it.toException()
-      return it.header(UPLOAD_OFFSET)?.toLongOrNull() ?: throw IOException("missing $UPLOAD_OFFSET")
-    }
+  /** Where a book imported from a public torrent came from; null if it wasn't. */
+  suspend fun source(bookId: String): Source? = execute(get("books/$bookId/source")).use {
+    if (it.code == 404) return null
+    val body = withContext(Dispatchers.IO) { it.body.string() }
+    if (!it.isSuccessful) throw MurmurException(it.code, body)
+    murmurJson.decodeFromString(Source.serializer(), body)
   }
 
-  /** Caller must close the response. */
-  suspend fun download(
-    transferId: String,
-    index: Int,
-    from: Long,
-  ): Response {
-    val builder = request("transfers/$transferId/files/$index").get()
-    if (from > 0) builder.header("Range", "bytes=$from-")
-    val response = execute(builder.build())
-    if (!response.isSuccessful) {
-      response.use { throw it.toException() }
-    }
-    if (from > 0 && response.code != 206) {
-      response.close()
-      throw IOException("server ignored range request")
-    }
-    return response
-  }
+  /** Books this user holds that the community is waiting for; seed them now. */
+  suspend fun requests(): List<SeedRequest> = call(get("me/requests"), RequestsResponse.serializer()).books
 
   /** Sends an opt-in diagnostic report; [report] must have an `event` field. */
   suspend fun telemetry(report: JsonObject) = call(
     request("telemetry").post(murmurJson.encodeToString(JsonObject.serializer(), report).toRequestBody(JSON)),
   )
-
-  suspend fun received(transferId: String) = call(request("transfers/$transferId/received").post(ByteArray(0).toRequestBody()))
 
   private fun request(path: String): Request.Builder {
     val builder = Request.Builder().url(base.resolve(path)!!)
@@ -156,10 +127,8 @@ class MurmurApi(
   }
 
   companion object {
-    const val UPLOAD_OFFSET = "Upload-Offset"
     private val JSON = "application/json".toMediaType()
     private val JPEG = "image/jpeg".toMediaType()
-    val OCTETS = "application/offset+octet-stream".toMediaType()
 
     private val defaultClient = OkHttpClient.Builder()
       .readTimeout(60, TimeUnit.SECONDS)
@@ -209,6 +178,8 @@ data class LibraryBook(
   val cover: Boolean = false,
   /** The server keeps a copy, so a request doesn't wait for a holder. */
   val cached: Boolean = false,
+  /** It came from a public torrent, which [MurmurApi.source] describes. */
+  val source: Boolean = false,
 ) {
   val holding: Boolean get() = mine == "holding"
   val wanting: Boolean get() = mine == "wanting"
@@ -219,40 +190,35 @@ private data class ShareRequest(
   val title: String,
   val author: String,
   val manifest: List<ManifestFile>,
+  val pieces: String,
+  val source: Source?,
 )
 
 @Serializable
-private data class ShareResponse(val id: String)
+data class ShareResponse(
+  val id: String,
+  val infoHash: String,
+)
 
+/** A public torrent a book was imported from: the manifest path of each of its files there. */
 @Serializable
-private data class UploadsResponse(val uploads: List<Upload>)
-
-@Serializable
-data class Upload(
-  val transferId: String,
-  val bookId: String,
-  val title: String,
-  val size: Long,
-  val files: List<TransferFile>,
+data class Source(
+  val magnet: String,
+  val files: List<SourceFile>,
 )
 
 @Serializable
-private data class DownloadsResponse(val downloads: List<Download>)
-
-@Serializable
-data class Download(
-  val transferId: String,
-  val bookId: String,
-  val title: String,
-  val author: String,
-  val files: List<TransferFile>,
-)
-
-@Serializable
-data class TransferFile(
+data class SourceFile(
+  /** Index in the torrent's file list. */
   val index: Int,
   val path: String,
-  val size: Long,
-  val sha256: String,
-  val offset: Long = 0,
+)
+
+@Serializable
+private data class RequestsResponse(val books: List<SeedRequest>)
+
+@Serializable
+data class SeedRequest(
+  val id: String,
+  val infoHash: String,
 )

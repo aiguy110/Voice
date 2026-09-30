@@ -1,9 +1,7 @@
 package voice.features.murmur
 
 import android.content.Context
-import androidx.core.net.toUri
 import androidx.datastore.core.DataStore
-import androidx.documentfile.provider.DocumentFile
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -11,12 +9,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.libtorrent4j.SessionManager
 import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.TorrentInfo
 import voice.core.data.layout.DetectedBook
@@ -46,8 +44,10 @@ data class MagnetState(
 )
 
 /**
- * Adding books to the library from magnet links: look up, choose books, download, copy into the download folder.
+ * Adding books to the library from magnet links: look up, choose books, download into the download folder.
  * Everything happens on the phone; the Murmur server hears about an imported book only if the user shares it later.
+ * [MurmurTorrents] drives the downloads through [advance]; finished books keep seeding their public torrent from
+ * there when [MurmurTorrents] seeds.
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -59,7 +59,7 @@ class MagnetImports(
   private val mediaScanTrigger: MediaScanTrigger,
 ) {
 
-  /** Fraction downloaded per import, while [run] is downloading it. */
+  /** Fraction downloaded per import, while it's downloading. */
   val progress: StateFlow<Map<String, Float>>
     field = MutableStateFlow(emptyMap())
 
@@ -72,6 +72,9 @@ class MagnetImports(
 
   private val scope = MainScope()
   private var lookup: Job? = null
+
+  /** Torrents of pending imports in the current session, by info hash. */
+  private val handles = mutableMapOf<String, TorrentHandle>()
 
   fun open() {
     dialog.value = MagnetState()
@@ -127,8 +130,7 @@ class MagnetImports(
     books: List<DetectedBook<Int>>,
   ) {
     require(books.isNotEmpty()) { "Choose at least one book." }
-    val settings = settingsStore.data.first()
-    checkNotNull(settings.downloadFolder) { "Choose a download folder first." }
+    val _ = downloadDir(settingsStore.data.first(), context)
     withContext(Dispatchers.IO) {
       torrentFile(plan.infoHash).apply { parentFile?.mkdirs() }.writeBytes(plan.torrent)
     }
@@ -151,123 +153,140 @@ class MagnetImports(
     )
     settingsStore.updateData { it.copy(imports = it.imports + (plan.infoHash to import)) }
     Logger.i("Murmur: importing ${books.size} books from ${plan.name}")
-    scheduler.importNow()
+    scheduler.torrentsNow()
   }
 
   suspend fun cancel(infoHash: String) {
     settingsStore.updateData { it.copy(imports = it.imports - infoHash) }
-    // A running import notices on its next pass and cleans up; otherwise clean up here.
-    if (progress.value[infoHash] == null) deleteStaging(infoHash)
+    // A running session notices on its next pass and cleans up; otherwise clean up here.
+    if (infoHash !in handles) deleteIncoming(infoHash)
   }
 
-  /** Downloads and copies every pending import. Returns once none are left. */
-  suspend fun run(onProgress: suspend (String) -> Unit) {
-    if (settingsStore.data.first().imports.isEmpty()) return
-    engine.use { session ->
-      val handles = mutableMapOf<String, TorrentHandle>()
-      try {
-        while (true) {
-          val imports = settingsStore.data.first().imports
-          (handles.keys - imports.keys).forEach { cancelled ->
-            handles.remove(cancelled)?.let { session.remove(it) }
-            deleteStaging(cancelled)
-          }
-          if (imports.isEmpty()) break
-
-          imports.forEach { (hash, import) ->
-            val handle = handles.getOrPut(hash) {
-              engine.find(session, hash)
-                ?: engine.add(session, import.magnet, torrentFile(hash).readBytes(), import.wantedFiles(), stagingDir(hash))
-            }
-            val wanted = import.books.flatMap { it.files }
-            val done = handle.fileProgress()
-            val total = wanted.sumOf { it.size }.coerceAtLeast(1)
-            val have = wanted.sumOf { minOf(done[it.index], it.size) }
-            progress.value += hash to have.toFloat() / total
-            if (wanted.all { done[it.index] >= it.size }) {
-              finish(hash, import)
-              handles.remove(hash)?.let { session.remove(it) }
-              deleteStaging(hash)
-              settingsStore.updateData { it.copy(imports = it.imports - hash) }
-              progress.value -= hash
-            }
-          }
-          val current = progress.value
-          val line = settingsStore.data.first().imports.entries.joinToString(" · ") { (hash, import) ->
-            "${import.name}: ${((current[hash] ?: 0F) * 100).toInt()}%"
-          }
-          if (line.isNotEmpty()) onProgress(line)
-          delay(POLL_MILLIS)
-        }
-      } finally {
-        progress.value = emptyMap()
+  /**
+   * One pass over pending imports in [session]: adds new ones, drops cancelled
+   * ones, and moves finished books into place. Returns a status line, or null
+   * if nothing is pending.
+   */
+  suspend fun advance(session: SessionManager): String? {
+    val imports = settingsStore.data.first().imports
+    (handles.keys - imports.keys).forEach { cancelled ->
+      handles.remove(cancelled)?.let { session.remove(it) }
+      deleteIncoming(cancelled)
+      progress.value -= cancelled
+    }
+    if (imports.isEmpty()) return null
+    val folder = downloadDir(settingsStore.data.first(), context)
+    imports.forEach { (hash, import) ->
+      val handle = handles.getOrPut(hash) {
+        engine.find(session, hash)
+          ?: engine.add(
+            session,
+            torrentFile(hash).readBytes(),
+            saveDir = stagingDir(hash),
+            magnet = import.magnet,
+            wanted = import.wantedFiles(),
+            paths = import.books.withIndex().flatMap { (i, book) ->
+              book.files.map { it.index to File(incoming(folder, hash), "$i/${it.path}").absolutePath }
+            }.toMap(),
+          )
+      }
+      val wanted = import.books.flatMap { it.files }
+      val done = handle.fileProgress()
+      val total = wanted.sumOf { it.size }.coerceAtLeast(1)
+      val have = wanted.sumOf { minOf(done[it.index], it.size) }
+      progress.value += hash to have.toFloat() / total
+      if (wanted.all { done[it.index] >= it.size }) {
+        handles.remove(hash)?.let { session.remove(it) }
+        finish(folder, hash, import)
+        deleteIncoming(hash)
+        settingsStore.updateData { it.copy(imports = it.imports - hash) }
+        progress.value -= hash
       }
     }
+    val current = progress.value
+    return settingsStore.data.first().imports.entries.joinToString(" · ") { (hash, import) ->
+      "${import.name}: ${((current[hash] ?: 0F) * 100).toInt()}%"
+    }.ifEmpty { null }
   }
 
-  /** Copies each finished book into the download folder and scans it into Voice's library. */
+  /** Forgets the session's torrents once it stops. */
+  fun sessionEnded() {
+    handles.clear()
+    progress.value = emptyMap()
+  }
+
+  /** Moves each finished book into the download folder, remembers where it came from, and scans it into Voice's library. */
   private suspend fun finish(
+    folder: File,
     hash: String,
     import: TorrentImport,
   ) {
-    val settings = settingsStore.data.first()
-    val folder = settings.downloadFolder?.let { DocumentFile.fromTreeUri(context, it.toUri()) }
-      ?: throw IOException("no download folder to import ${import.name} into")
-    val staging = stagingDir(hash)
     import.books.forEachIndexed { index, book ->
       if (book.done) return@forEachIndexed
-      val target = book.target?.let { DocumentFile.fromTreeUri(context, it.toUri()) }?.takeIf { it.exists() }
-        ?: withContext(Dispatchers.IO) { folder.createDirectory(uniqueName(folder, safeName(book.title))) }
-        ?: throw IOException("could not create a folder for ${book.title}")
-      updateBook(hash, index) { it.copy(target = target.uri.toString()) }
-      withContext(Dispatchers.IO) {
-        book.files.forEach { file ->
-          val output = context.contentResolver.openOutputStream(target.resolve(file.path).uri, "wt")
-            ?: throw IOException("cannot write ${file.path}")
-          output.use { File(staging, file.source).inputStream().use { input -> input.copyTo(it) } }
-        }
+      val target = withContext(Dispatchers.IO) {
+        val target = File(folder, uniqueName(folder, safeName(book.title)))
+        if (!File(incoming(folder, hash), "$index").renameTo(target)) throw IOException("could not move ${book.title} into place")
+        target
       }
-      updateBook(hash, index) { it.copy(done = true) }
+      val imported = ImportedBook(hash, import.magnet, book.files.associate { it.index to it.path })
+      settingsStore.updateData { settings ->
+        val current = settings.imports[hash] ?: return@updateData settings
+        val books = current.books.toMutableList().also { it[index] = book.copy(target = target.absolutePath, done = true) }
+        settings.copy(
+          imports = settings.imports + (hash to current.copy(books = books)),
+          imported = settings.imported + (target.absolutePath to imported),
+        )
+      }
       Logger.i("Murmur: imported ${book.title} from ${import.name}")
     }
     mediaScanTrigger.scan()
   }
 
-  private suspend fun updateBook(
-    hash: String,
-    index: Int,
-    update: (ImportBook) -> ImportBook,
-  ) {
-    settingsStore.updateData { settings ->
-      val import = settings.imports[hash] ?: return@updateData settings
-      val books = import.books.toMutableList().also { it[index] = update(it[index]) }
-      settings.copy(imports = settings.imports + (hash to import.copy(books = books)))
-    }
-  }
-
   private fun TorrentImport.wantedFiles() = books.flatMap { book -> book.files.map { it.index } }.toSet()
 
+  /** Where libtorrent keeps partial pieces of files nobody wants. */
   private fun stagingDir(hash: String) = File(context.getExternalFilesDir(null) ?: context.filesDir, "murmur-torrents/$hash")
 
-  private fun torrentFile(hash: String) = File(context.filesDir, "murmur/torrents/$hash.torrent")
+  /** The torrent's metadata, kept after the import so its books can seed the public swarm. */
+  fun torrentFile(hash: String) = File(context.filesDir, "murmur/torrents/$hash.torrent")
 
-  private suspend fun deleteStaging(hash: String) {
+  private suspend fun deleteIncoming(hash: String) {
     withContext(Dispatchers.IO) {
       stagingDir(hash).deleteRecursively()
-      torrentFile(hash).delete()
+      val _ = runCatching { incoming(downloadDir(settingsStore.data.first(), context), hash).deleteRecursively() }
+      if (settingsStore.data.first().imported.values.none { it.infoHash == hash }) torrentFile(hash).delete()
     }
   }
+}
 
-  private fun uniqueName(
-    folder: DocumentFile,
-    name: String,
-  ): String = generateSequence(1) { it + 1 }
-    .map { if (it == 1) name else "$name ($it)" }
-    .first { folder.findFile(it) == null }
+/** Where books are downloaded before they're verified and moved into [folder]. Voice's scanner skips dot folders. */
+internal fun incoming(
+  folder: File,
+  name: String,
+) = File(folder, ".murmur/$name")
 
-  private companion object {
-    const val POLL_MILLIS = 2_000L
-  }
+/** The download folder as a path. Needs file access. */
+internal fun downloadDir(
+  settings: MurmurSettings,
+  context: Context,
+): File {
+  val uri = checkNotNull(settings.downloadFolder) { "Choose a download folder first." }
+  check(StorageAccess.granted(context)) { "Allow file access in Murmur settings first." }
+  return checkNotNull(StorageAccess.file(uri)) { "The download folder must be on this device's storage." }
+}
+
+/** A name in [folder] that doesn't collide with an existing one; "(2)" goes before a file's [extension]. */
+internal fun uniqueName(
+  folder: File,
+  name: String,
+  extension: Boolean = false,
+): String {
+  val dot = name.lastIndexOf('.').takeIf { extension && it > 0 } ?: name.length
+  val stem = name.substring(0, dot)
+  val suffix = name.substring(dot)
+  return generateSequence(1) { it + 1 }
+    .map { if (it == 1) name else "$stem ($it)$suffix" }
+    .first { !File(folder, it).exists() }
 }
 
 /** The books in a torrent, from its file list alone. */

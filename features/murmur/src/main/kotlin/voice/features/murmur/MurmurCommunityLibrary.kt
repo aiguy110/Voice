@@ -26,18 +26,19 @@ class MurmurCommunityLibrary(
   private val context: Context,
   private val repository: MurmurRepository,
   private val covers: MurmurCovers,
+  private val torrents: MurmurTorrents,
 ) : CommunityLibrary {
 
   private val scope = MainScope()
 
   override val state: Flow<CommunityLibraryState?> =
-    combine(repository.settings, repository.library, covers.changes) { settings, library, _ ->
+    combine(repository.settings, repository.library, covers.changes, torrents.downloads) { settings, library, _, downloads ->
       if (settings.connection == null) return@combine null
       CommunityLibraryState(
         name = "Murmur Community",
         books = library
-          .filter { !it.holding && it.id !in settings.shared && (it.wanting || it.cached || it.holders.isNotEmpty()) }
-          .map { it.toCommunityBook(settings) },
+          .filter { !it.holding && it.id !in settings.shared && (it.wanting || it.cached || it.holders.isNotEmpty() || it.source) }
+          .map { it.toCommunityBook(settings, downloads[it.id]) },
         shared = settings.shared.values.mapTo(mutableSetOf(), ::BookId),
       )
     }
@@ -72,26 +73,32 @@ class MurmurCommunityLibrary(
 
   override fun cancelRequest(communityBookId: String) = run { repository.cancelRequest(communityBookId) }
 
-  private fun LibraryBook.toCommunityBook(settings: MurmurSettings) = CommunityBook(
+  private fun LibraryBook.toCommunityBook(
+    settings: MurmurSettings,
+    downloaded: Float?,
+  ) = CommunityBook(
     id = id,
     title = title,
     author = author.ifBlank { null },
     cover = covers.file(id)?.toURI()?.toString(),
     status = when {
       !wanting -> "${Formatter.formatShortFileSize(context, size)} · ${availability()}"
-      id in settings.downloading -> "Downloading…"
+      downloaded != null -> "Downloading… ${(downloaded * 100).toInt()}%"
       settings.downloadFolder == null -> "Requested · choose a download folder in Murmur settings"
+      !StorageAccess.granted(context) -> "Requested · allow file access in Murmur settings"
       cached -> "Requested · ready on the server"
-      holders.isEmpty() -> "Requested · nobody has it right now"
-      else -> "Requested from ${holders.joinToString()}"
+      holders.isNotEmpty() -> "Requested from ${holders.joinToString()}"
+      source -> "Requested · from its public torrent"
+      else -> "Requested · nobody has it right now"
     },
     requested = wanting,
   )
 
   private fun LibraryBook.availability() = when {
-    holders.isEmpty() -> "on the server"
+    cached && holders.isEmpty() -> "on the server"
     cached -> "on the server, shared by ${holders.joinToString()}"
-    else -> "shared by ${holders.joinToString()}"
+    holders.isNotEmpty() -> "shared by ${holders.joinToString()}"
+    else -> "from its public torrent"
   }
 
   private fun run(
