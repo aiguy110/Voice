@@ -16,6 +16,7 @@
   files). It only touches books Voice shows as not started, so it's safe to rerun.
 - Magnet imports: `MagnetImports` looks a link up (`TorrentEngine.metadata`, libtorrent4j), runs `detectBooks` (core/data/api) on the torrent's
   file list, and lets the user pick books. `MagnetImportWorker` (foreground, `dataSync`) downloads only the picked files into app storage,
-  copies each book into the download folder, shares it, and deletes the staging copy; no seeding afterwards. Pending imports live in
+  copies each book into the download folder, and deletes the staging copy; no seeding afterwards. Imports never touch the Murmur
+  server: a book is offered to the community only if the user shares it from the library later. Pending imports live in
   `MurmurSettings.imports` and resume on the next sync. The lookup dialog's state lives in `MagnetImports` because `MagnetLinkActivity`
   (the `magnet:` intent filter) restarts the app on the Murmur screen via `Destination.Murmur.OPEN_ACTION`.

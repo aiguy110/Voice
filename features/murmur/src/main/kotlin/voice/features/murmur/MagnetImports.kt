@@ -19,7 +19,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.TorrentInfo
-import voice.core.data.BookId
 import voice.core.data.layout.DetectedBook
 import voice.core.data.layout.detectBooks
 import voice.core.data.layout.layoutTree
@@ -27,7 +26,6 @@ import voice.core.logging.api.Logger
 import voice.core.scanner.MediaScanTrigger
 import java.io.File
 import java.io.IOException
-import java.security.MessageDigest
 
 /** What a magnet link holds, and the books found in it. */
 class MagnetPlan(
@@ -47,7 +45,10 @@ data class MagnetState(
   val selected: Set<Int> = emptySet(),
 )
 
-/** Adding books to the library from magnet links: look up, choose books, download, copy into the download folder. */
+/**
+ * Adding books to the library from magnet links: look up, choose books, download, copy into the download folder.
+ * Everything happens on the phone; the Murmur server hears about an imported book only if the user shares it later.
+ */
 @SingleIn(AppScope::class)
 @Inject
 class MagnetImports(
@@ -204,7 +205,7 @@ class MagnetImports(
     }
   }
 
-  /** Copies each finished book into the download folder, shares it, and scans it into Voice's library. */
+  /** Copies each finished book into the download folder and scans it into Voice's library. */
   private suspend fun finish(
     hash: String,
     import: TorrentImport,
@@ -226,30 +227,10 @@ class MagnetImports(
           output.use { File(staging, file.source).inputStream().use { input -> input.copyTo(it) } }
         }
       }
-      share(book, staging, target)
       updateBook(hash, index) { it.copy(done = true) }
       Logger.i("Murmur: imported ${book.title} from ${import.name}")
     }
     mediaScanTrigger.scan()
-  }
-
-  private suspend fun share(
-    book: ImportBook,
-    staging: File,
-    target: DocumentFile,
-  ) {
-    val settings = settingsStore.data.first()
-    val connection = settings.connection ?: return
-    if (!settings.keepSharing) return
-    try {
-      val manifest = withContext(Dispatchers.IO) {
-        book.files.filterNot { it.isCover }.map { ManifestFile(it.path, it.size, sha256(File(staging, it.source))) }
-      }
-      val id = MurmurApi(connection.serverUrl, connection.token).share(book.title, book.author, manifest)
-      settingsStore.updateData { it.copy(shared = it.shared + (id to BookId(target.uri).value)) }
-    } catch (e: IOException) {
-      Logger.w(e, "Murmur: could not share imported ${book.title}; share it from the library later")
-    }
   }
 
   private suspend fun updateBook(
@@ -306,17 +287,4 @@ internal fun plan(
     torrent = torrent,
     books = detectBooks(layoutTree(entries)),
   )
-}
-
-private fun sha256(file: File): String {
-  val digest = MessageDigest.getInstance("SHA-256")
-  file.inputStream().use { input ->
-    val buffer = ByteArray(DEFAULT_BUFFER_SIZE * 16)
-    while (true) {
-      val read = input.read(buffer)
-      if (read < 0) break
-      digest.update(buffer, 0, read)
-    }
-  }
-  return digest.digest().toHex()
 }
