@@ -34,12 +34,9 @@ class MurmurRepository(
   val library: StateFlow<List<LibraryBook>>
     field = MutableStateFlow(emptyList())
 
-  suspend fun join(
-    serverUrl: String,
-    username: String,
-  ) {
+  suspend fun join(serverUrl: String) {
     val url = serverUrl.trim().trimEnd('/').let { if ("://" in it) it else "https://$it" }
-    val registered = MurmurApi(url, token = null).register(username.trim())
+    val registered = MurmurApi(url, token = null).register()
     settingsStore.updateData {
       it.copy(serverUrl = url, username = registered.username, token = registered.token, shared = emptyMap())
     }
@@ -58,6 +55,9 @@ class MurmurRepository(
   /** Fetches the library, then brings covers up to date in both directions. */
   suspend fun refreshLibrary() {
     val api = api()
+    // Members change their name on the server's web page.
+    val username = api.me().username
+    settingsStore.updateData { if (it.token != null) it.copy(username = username) else it }
     val books = api.library()
     library.value = books
     covers.sync(api, books, settingsStore.data.first().shared)

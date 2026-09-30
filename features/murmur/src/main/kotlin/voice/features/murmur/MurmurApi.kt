@@ -28,8 +28,9 @@ class MurmurApi(
 
   private val base: HttpUrl = serverUrl.trimEnd('/').plus("/v2/").toHttpUrl()
 
-  suspend fun register(username: String): RegisterResponse = call(
-    post("register", RegisterRequest(username), RegisterRequest.serializer()),
+  /** Joins as the Tailscale login this device is signed in to; the server knows it from the connection. */
+  suspend fun register(): RegisterResponse = call(
+    post("register", RegisterRequest(), RegisterRequest.serializer()),
     RegisterResponse.serializer(),
   )
 
@@ -143,7 +144,7 @@ class MurmurException(
   val status: Int,
   body: String,
 ) : IOException("HTTP $status: $body") {
-  /** The protocol's machine-readable error code, e.g. `username_taken`. */
+  /** The protocol's machine-readable error code, e.g. `tailnet_required`. */
   val code: String? = runCatching { murmurJson.decodeFromString(ErrorResponse.serializer(), body).error }.getOrNull()
 }
 
@@ -151,7 +152,7 @@ class MurmurException(
 private data class ErrorResponse(val error: String)
 
 @Serializable
-private data class RegisterRequest(val username: String)
+private class RegisterRequest
 
 @Serializable
 data class RegisterResponse(

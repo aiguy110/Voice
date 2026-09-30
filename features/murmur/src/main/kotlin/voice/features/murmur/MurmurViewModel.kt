@@ -80,11 +80,8 @@ class MurmurViewModel(
     repository.syncNow()
   }
 
-  fun join(
-    serverUrl: String,
-    username: String,
-  ) = run {
-    repository.join(serverUrl, username)
+  fun join(serverUrl: String) = run {
+    repository.join(serverUrl)
   }
 
   fun leave() = run {
@@ -167,8 +164,7 @@ class MurmurViewModel(
   }
 
   private fun describe(code: String): String = when (code) {
-    "username_taken" -> "That username belongs to someone else. If it's yours, join from the Tailscale account you first used it with."
-    "invalid_username" -> "Usernames are 2–32 letters, digits, '.', '_' or '-'."
+    "tailnet_required" -> "Murmur knows you by your Tailscale account. Connect Tailscale and use the server's Tailscale address."
     "unauthorized" -> "The server doesn't recognise this device any more. Leave and join again."
     "already_holding" -> "You already have this book."
     else -> "Server error: $code"

@@ -39,6 +39,7 @@ import androidx.compose.runtime.retain.retain
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavEntry
@@ -161,15 +162,14 @@ fun MurmurScreen(modifier: Modifier = Modifier) {
 @Composable
 private fun JoinForm(
   savedServerUrl: String?,
-  onJoin: (serverUrl: String, username: String) -> Unit,
+  onJoin: (serverUrl: String) -> Unit,
 ) {
   var serverUrl by remember { mutableStateOf(savedServerUrl.orEmpty()) }
-  var username by remember { mutableStateOf("") }
   Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text(
       "Murmur shares audiobooks with a small community. Books you share stay on your phone; " +
         "when someone asks for one, your phone sends it to them over BitTorrent, and the community server keeps a copy. " +
-        "Already have a username here? Enter it to get your account back.",
+        "Your Tailscale account is your Murmur account, so joining from another device picks up where you left off.",
     )
     OutlinedTextField(
       value = serverUrl,
@@ -179,14 +179,7 @@ private fun JoinForm(
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
       modifier = Modifier.fillMaxWidth(),
     )
-    OutlinedTextField(
-      value = username,
-      onValueChange = { username = it },
-      label = { Text("Username") },
-      singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
-    )
-    Button(onClick = { onJoin(serverUrl, username) }, enabled = username.isNotBlank()) {
+    Button(onClick = { onJoin(serverUrl) }, enabled = serverUrl.isNotBlank()) {
       Text("Join")
     }
   }
@@ -213,7 +206,7 @@ private fun Library(
       },
       dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Stay") } },
       title = { Text("Leave this community?") },
-      text = { Text("To get your username back later, join again with it from the same Tailscale account.") },
+      text = { Text("Your account stays on the server. Join again from the same Tailscale account to pick it back up.") },
     )
   }
   LazyColumn(Modifier.fillMaxSize()) {
@@ -272,6 +265,14 @@ private fun Library(
         leadingContent = { Icon(VoiceIcons.Person, contentDescription = null) },
         supportingContent = { Text("${viewState.connection?.serverUrl} · tap to leave") },
       ) { Text("Signed in as ${viewState.connection?.username}") }
+    }
+    item {
+      val uriHandler = LocalUriHandler.current
+      ListItem(
+        modifier = Modifier.clickable { viewState.connection?.let { uriHandler.openUri(it.serverUrl + "/account") } },
+        leadingContent = { Icon(VoiceIcons.Language, contentDescription = null) },
+        supportingContent = { Text("Choose the name others see, on the server's web page") },
+      ) { Text("Change your name") }
     }
     item { Spacer(Modifier.padding(40.dp)) }
   }
