@@ -207,6 +207,8 @@ data class LibraryBook(
   val wanters: List<String>,
   val mine: String? = null,
   val cover: Boolean = false,
+  /** The server keeps a copy, so a request doesn't wait for a holder. */
+  val cached: Boolean = false,
 ) {
   val holding: Boolean get() = mine == "holding"
   val wanting: Boolean get() = mine == "wanting"

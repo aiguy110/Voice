@@ -36,7 +36,7 @@ class MurmurCommunityLibrary(
       CommunityLibraryState(
         name = "Murmur Community",
         books = library
-          .filter { !it.holding && it.id !in settings.shared && (it.wanting || it.holders.isNotEmpty()) }
+          .filter { !it.holding && it.id !in settings.shared && (it.wanting || it.cached || it.holders.isNotEmpty()) }
           .map { it.toCommunityBook(settings) },
         shared = settings.shared.values.mapTo(mutableSetOf(), ::BookId),
       )
@@ -78,14 +78,21 @@ class MurmurCommunityLibrary(
     author = author.ifBlank { null },
     cover = covers.file(id)?.toURI()?.toString(),
     status = when {
-      !wanting -> "${Formatter.formatShortFileSize(context, size)} · shared by ${holders.joinToString()}"
+      !wanting -> "${Formatter.formatShortFileSize(context, size)} · ${availability()}"
       id in settings.downloading -> "Downloading…"
       settings.downloadFolder == null -> "Requested · choose a download folder in Murmur settings"
+      cached -> "Requested · ready on the server"
       holders.isEmpty() -> "Requested · nobody has it right now"
       else -> "Requested from ${holders.joinToString()}"
     },
     requested = wanting,
   )
+
+  private fun LibraryBook.availability() = when {
+    holders.isEmpty() -> "on the server"
+    cached -> "on the server, shared by ${holders.joinToString()}"
+    else -> "shared by ${holders.joinToString()}"
+  }
 
   private fun run(
     quiet: Boolean = false,
