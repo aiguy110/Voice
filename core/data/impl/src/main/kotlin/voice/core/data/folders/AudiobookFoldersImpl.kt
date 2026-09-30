@@ -1,7 +1,5 @@
 package voice.core.data.folders
 
-import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.datastore.core.DataStore
@@ -13,6 +11,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import voice.core.analytics.api.Analytics
 import voice.core.documentfile.CachedDocumentFile
 import voice.core.documentfile.CachedDocumentFileFactory
@@ -31,13 +31,13 @@ internal constructor(
   private val authorAudiobookFoldersStore: DataStore<Set<@JvmSuppressWildcards Uri>>,
   @SmartAudiobookFoldersStore
   private val smartAudiobookFoldersStore: DataStore<Set<@JvmSuppressWildcards Uri>>,
-  private val context: Context,
   private val cachedDocumentFileFactory: CachedDocumentFileFactory,
   private val analytics: Analytics,
   private val persistedUriPermissions: PersistedUriPermissions,
 ) : AudiobookFolders {
 
   private val scope = MainScope()
+  private val mutationMutex = Mutex()
 
   public override fun all(): Flow<Map<FolderType, List<DocumentFileWithUri>>> {
     val flows = FolderType.entries
@@ -83,16 +83,15 @@ internal constructor(
   ) {
     analytics.event("add_folder", mapOf("type" to type.name))
     try {
-      context.contentResolver.takePersistableUriPermission(
-        uri,
-        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-      )
+      persistedUriPermissions.take(uri)
     } catch (_: SecurityException) {
-      Logger.w("Could not release uri permission for $uri")
+      Logger.w("Could not persist uri permission for $uri")
     }
     scope.launch {
-      dataStore(type).updateData {
-        it + uri
+      mutationMutex.withLock {
+        dataStore(type).updateData {
+          it + uri
+        }
       }
     }
   }
@@ -102,17 +101,21 @@ internal constructor(
     folderType: FolderType,
   ) {
     analytics.event("remove_folder", mapOf("type" to folderType.name))
-    try {
-      context.contentResolver.releasePersistableUriPermission(
-        uri,
-        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-      )
-    } catch (_: SecurityException) {
-      Logger.w("Could not release uri permission for $uri")
-    }
     scope.launch {
-      dataStore(folderType).updateData { folders ->
-        folders - uri
+      mutationMutex.withLock {
+        dataStore(folderType).updateData { folders ->
+          folders - uri
+        }
+        val stillUsed = FolderType.entries.any { type ->
+          uri in dataStore(type).data.first()
+        }
+        if (!stillUsed) {
+          try {
+            persistedUriPermissions.release(uri)
+          } catch (_: SecurityException) {
+            Logger.w("Could not release uri permission for $uri")
+          }
+        }
       }
     }
   }
