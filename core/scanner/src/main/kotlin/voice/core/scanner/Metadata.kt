@@ -6,6 +6,7 @@ import kotlin.time.Duration
 internal data class Metadata(
   val duration: Long,
   val artist: String?,
+  val albumArtist: String?,
   val album: String?,
   val title: String?,
   val fileName: String,
@@ -18,6 +19,7 @@ internal data class Metadata(
 
   internal class Builder(val fileName: String) {
     var artist: String? = null
+    var albumArtist: String? = null
     var album: String? = null
     var title: String? = null
     val chapters = mutableListOf<MarkData>()
@@ -44,6 +46,7 @@ internal data class Metadata(
       return Metadata(
         duration = duration.inWholeMilliseconds,
         artist = artist,
+        albumArtist = albumArtist,
         album = album,
         title = title ?: fileName,
         fileName = fileName,

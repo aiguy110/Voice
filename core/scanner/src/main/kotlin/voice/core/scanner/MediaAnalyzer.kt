@@ -122,8 +122,14 @@ internal class MediaAnalyzer(
       "com.apple.quicktime.artist" -> {
         builder.artist = entry.value.toString(Charsets.UTF_8)
       }
+      "com.apple.quicktime.album_artist" -> {
+        builder.albumArtist = entry.value.toString(Charsets.UTF_8)
+      }
       "com.apple.quicktime.album" -> {
         builder.album = entry.value.toString(Charsets.UTF_8)
+      }
+      "com.apple.quicktime.grouping" -> {
+        builder.series = entry.value.toString(Charsets.UTF_8)
       }
     }
   }
@@ -136,8 +142,11 @@ internal class MediaAnalyzer(
     val value = entry.value
     when {
       key == "ARTIST" -> builder.artist = value
+      key == "ALBUMARTIST" || key == "ALBUM_ARTIST" -> builder.albumArtist = value
       key == "ALBUM" -> builder.album = value
       key == "TITLE" -> builder.title = value
+      key == "GROUPING" || key == "SERIES" -> builder.series = value
+      key == "PART" -> builder.part = value
       key.startsWith("CHAPTER") -> {
         val withoutPrefix = key.removePrefix("CHAPTER")
         val isName = withoutPrefix.endsWith("NAME")
@@ -180,7 +189,9 @@ internal class MediaAnalyzer(
     when (entry.id) {
       "TIT2" -> builder.title = value
       "TPE1" -> builder.artist = value
+      "TPE2" -> builder.albumArtist = value
       "TALB" -> builder.album = value
+      "TIT1" -> builder.series = value
       "TCON" -> builder.genre = value
       "TCOM" -> builder.narrator = value
       "TXXX" -> when (entry.description) {

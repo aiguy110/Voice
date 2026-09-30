@@ -287,6 +287,7 @@ class MediaScannerTest {
             Metadata(
               duration = 1000L,
               artist = "Author",
+              albumArtist = null,
               album = "Book Name",
               fileName = "Chapter",
               chapters = emptyList(),

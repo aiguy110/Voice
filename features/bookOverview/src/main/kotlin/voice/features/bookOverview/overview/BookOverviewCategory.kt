@@ -16,11 +16,11 @@ enum class BookOverviewCategory(
   ),
   NOT_STARTED(
     nameRes = StringsR.string.library_category_not_started_title,
-    comparator = BookComparator.ByName,
+    comparator = BookComparator.BySeries,
   ),
   FINISHED(
     nameRes = StringsR.string.library_category_completed_title,
-    comparator = BookComparator.ByName,
+    comparator = BookComparator.BySeries,
   ),
 }
 

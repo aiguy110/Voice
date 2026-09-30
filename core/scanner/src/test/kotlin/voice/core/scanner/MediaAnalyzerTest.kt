@@ -88,6 +88,16 @@ internal class MediaAnalyzerTest {
   }
 
   @Test
+  fun `m4a album artist and grouping become author and series metadata`() {
+    val metadata = assertNotNull(parse("series_metadata.m4a"))
+
+    assertEquals(expected = "The Wheel of Time", actual = metadata.artist)
+    assertEquals(expected = "Robert Jordan", actual = metadata.albumArtist)
+    assertEquals(expected = "The Wheel of Time", actual = metadata.series)
+    assertEquals(expected = "02 The Great Hunt", actual = metadata.album)
+  }
+
+  @Test
   fun ogg() {
     val metadata = assertNotNull(parse("auphonic_chapters_demo.ogg"))
 

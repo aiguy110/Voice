@@ -23,4 +23,16 @@ class BookComparatorTest {
     val sorted = books.sortedWith(BookComparator.ByName)
     assertEquals(expected = listOf(b1, b2, b3, b5, b4), actual = sorted)
   }
+
+  @Test
+  fun `by series keeps series together and orders by part`() {
+    val standalone = book(name = "A Standalone")
+    val otherSeries = book(name = "01 Other", series = "Other Series", part = "1")
+    val series2 = book(name = "Second", series = "The Series", part = "2")
+    val series11 = book(name = "Eleventh", series = "The Series", part = "11")
+
+    val sorted = listOf(series11, otherSeries, series2, standalone).sortedWith(BookComparator.BySeries)
+
+    assertEquals(expected = listOf(standalone, otherSeries, series2, series11), actual = sorted)
+  }
 }

@@ -6,7 +6,6 @@ import voice.core.data.BookContent
 import voice.core.data.BookId
 import voice.core.data.Chapter
 import voice.core.data.repo.BookContentRepo
-import voice.core.data.repo.getOrPut
 import voice.core.data.toUri
 import voice.core.documentfile.CachedDocumentFile
 import voice.core.documentfile.CachedDocumentFileFactory
@@ -26,11 +25,25 @@ internal class BookParser(
     firstChapterMetadata: Metadata?,
   ): BookContent {
     val id = BookId(file.uri)
-    return contentRepo.getOrPut(id) {
-      val analyzed = firstChapterMetadata
-        ?: mediaAnalyzer.analyze(fileFactory.create(chapters.first().id.toUri()))
+    val existing = contentRepo.get(id)
+    if (existing?.metadataVersion == METADATA_VERSION) return existing
+
+    val analyzed = firstChapterMetadata
+      ?: mediaAnalyzer.analyze(fileFactory.create(chapters.first().id.toUri()))
+    val updated = if (existing == null) {
       parse(chapters, id, analyzed, file)
+    } else {
+      existing.copy(
+        author = analyzed?.albumArtist ?: analyzed?.artist ?: existing.author,
+        genre = analyzed?.genre ?: existing.genre,
+        narrator = analyzed?.narrator ?: existing.narrator,
+        series = analyzed?.series ?: existing.series,
+        part = analyzed?.part ?: inferPart(analyzed?.album, analyzed?.series) ?: existing.part,
+        metadataVersion = METADATA_VERSION,
+      )
     }
+    contentRepo.put(updated)
+    return updated
   }
 
   fun parse(
@@ -43,7 +56,7 @@ internal class BookParser(
       id = id,
       isActive = true,
       addedAt = Instant.now(),
-      author = analyzed?.artist,
+      author = analyzed?.albumArtist ?: analyzed?.artist,
       lastPlayedAt = Instant.EPOCH,
       name = analyzed?.album
         ?: analyzed?.title?.takeIf { file.isFile }
@@ -58,7 +71,8 @@ internal class BookParser(
       genre = analyzed?.genre,
       narrator = analyzed?.narrator,
       series = analyzed?.series,
-      part = analyzed?.part,
+      part = analyzed?.part ?: inferPart(analyzed?.album, analyzed?.series),
+      metadataVersion = METADATA_VERSION,
     ).also {
       validateIntegrity(it, chapters)
     }
@@ -81,6 +95,19 @@ internal class BookParser(
         fileName
       }
     }
+  }
+
+  private fun inferPart(
+    album: String?,
+    series: String?,
+  ): String? {
+    if (series.isNullOrBlank()) return null
+    return album?.let { LEADING_PART.find(it)?.groupValues?.get(1) }
+  }
+
+  private companion object {
+    const val METADATA_VERSION = 1
+    val LEADING_PART = Regex("""^\s*(\d+(?:\.\d+)?)\b""")
   }
 }
 

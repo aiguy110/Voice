@@ -10,6 +10,8 @@ fun book(
   currentChapter: ChapterId = chapters.first().id,
   lastPlayedAtMillis: Long = 0,
   addedAtMillis: Long = 0,
+  series: String? = null,
+  part: String? = null,
 ): Book {
   return Book(
     content = BookContent(
@@ -28,8 +30,8 @@ fun book(
       gain = 0F,
       genre = null,
       narrator = null,
-      series = null,
-      part = null,
+      series = series,
+      part = part,
     ),
     chapters = chapters,
   )

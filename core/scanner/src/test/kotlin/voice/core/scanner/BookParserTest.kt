@@ -2,13 +2,20 @@ package voice.core.scanner
 
 import androidx.core.net.toUri
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.just
 import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import voice.core.data.BookId
 import voice.core.data.Chapter
 import voice.core.data.ChapterId
+import voice.core.data.repo.BookContentRepo
+import voice.core.documentfile.FileBasedDocumentFactory
 import voice.core.documentfile.FileBasedDocumentFile
 import java.io.File
 import java.time.Instant
@@ -111,6 +118,72 @@ class BookParserTest {
     assertEquals(expected = "Fallback Folder", actual = content.name)
   }
 
+  @Test
+  fun `album artist is the author and numbered album supplies series part`() {
+    val bookFolder = testFolder.newFolder("book")
+    val chapters = listOf(chapter(File(bookFolder, "1.m4b").apply { createNewFile() }))
+
+    val content = parser.parse(
+      chapters = chapters,
+      id = BookId(bookFolder.toUri()),
+      analyzed = metadata(
+        album = "02 The Great Hunt",
+        title = "Chapter 1",
+        artist = "The Wheel of Time",
+        albumArtist = "Robert Jordan",
+        series = "The Wheel of Time",
+      ),
+      file = FileBasedDocumentFile(bookFolder),
+    )
+
+    assertEquals(expected = "Robert Jordan", actual = content.author)
+    assertEquals(expected = "The Wheel of Time", actual = content.series)
+    assertEquals(expected = "02", actual = content.part)
+  }
+
+  @Test
+  fun `old metadata is backfilled without replacing playback state or title`() = runTest {
+    val bookFolder = testFolder.newFolder("book")
+    val audioFile = File(bookFolder, "1.m4b").apply { createNewFile() }
+    val chapters = listOf(chapter(audioFile))
+    val oldContent = parser.parse(
+      chapters = chapters,
+      id = BookId(bookFolder.toUri()),
+      analyzed = metadata(album = "Original Album", title = "Chapter", artist = "Wrong Author"),
+      file = FileBasedDocumentFile(bookFolder),
+    ).copy(
+      name = "My Edited Title",
+      positionInChapter = 321L,
+      metadataVersion = 0,
+    )
+    val repo = mockk<BookContentRepo> {
+      coEvery { get(oldContent.id) } returns oldContent
+      coEvery { put(any()) } just Runs
+    }
+    val analyzer = mockk<MediaAnalyzer> {
+      coEvery { analyze(any()) } returns metadata(
+        album = "02 The Great Hunt",
+        title = "Chapter",
+        artist = "The Wheel of Time",
+        albumArtist = "Robert Jordan",
+        series = "The Wheel of Time",
+      )
+    }
+    val backfilled = BookParser(repo, analyzer, FileBasedDocumentFactory).parseAndStore(
+      chapters = chapters,
+      file = FileBasedDocumentFile(bookFolder),
+      firstChapterMetadata = null,
+    )
+
+    assertEquals(expected = "My Edited Title", actual = backfilled.name)
+    assertEquals(expected = 321L, actual = backfilled.positionInChapter)
+    assertEquals(expected = "Robert Jordan", actual = backfilled.author)
+    assertEquals(expected = "The Wheel of Time", actual = backfilled.series)
+    assertEquals(expected = "02", actual = backfilled.part)
+    assertEquals(expected = 1, actual = backfilled.metadataVersion)
+    coVerify(exactly = 1) { repo.put(backfilled) }
+  }
+
   private fun chapter(file: File): Chapter = Chapter(
     id = ChapterId(file.toUri()),
     name = "Chapter",
@@ -123,16 +196,21 @@ class BookParserTest {
   private fun metadata(
     album: String?,
     title: String?,
+    artist: String? = null,
+    albumArtist: String? = null,
+    series: String? = null,
+    part: String? = null,
   ): Metadata = Metadata(
     duration = 1000L,
-    artist = null,
+    artist = artist,
+    albumArtist = albumArtist,
     album = album,
     title = title,
     fileName = "file",
     chapters = emptyList(),
     genre = null,
     narrator = null,
-    series = null,
-    part = null,
+    series = series,
+    part = part,
   )
 }

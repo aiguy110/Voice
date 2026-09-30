@@ -59,6 +59,7 @@ class ChapterParserTest {
             duration = 1000,
             fileName = file.nameWithoutExtension(),
             artist = null,
+            albumArtist = null,
             album = null,
             chapters = emptyList(),
             title = null,
