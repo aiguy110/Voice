@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
 
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
   <!-- Self-updates from the fork's GitHub releases (MurmurUpdater). -->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <!-- Magnet imports download in a foreground service (MagnetImportWorker). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
   <!-- Murmur servers are reached over a private network (e.g. Tailscale, which already encrypts traffic), usually as plain http. -->
   <application android:usesCleartextTraffic="true">
@@ -17,5 +22,21 @@
     <receiver
       android:name="voice.features.murmur.MurmurInstallReceiver"
       android:exported="false" />
+    <activity
+      android:name="voice.features.murmur.MagnetLinkActivity"
+      android:excludeFromRecents="true"
+      android:exported="true"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="magnet" />
+      </intent-filter>
+    </activity>
+    <service
+      android:name="androidx.work.impl.foreground.SystemForegroundService"
+      android:foregroundServiceType="dataSync"
+      tools:node="merge" />
   </application>
 </manifest>

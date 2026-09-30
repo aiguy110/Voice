@@ -118,6 +118,8 @@ android {
   }
 
   packaging {
+    // Compressed native libraries keep the Murmur APK small (libtorrent is ~15 MB per ABI uncompressed).
+    jniLibs.useLegacyPackaging = true
     with(resources.pickFirsts) {
       add("META-INF/atomicfu.kotlin_module")
       add("META-INF/core.kotlin_module")

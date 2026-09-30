@@ -163,18 +163,6 @@ class MurmurSync(
     return created
   }
 
-  private fun DocumentFile.resolve(path: String): DocumentFile {
-    val segments = path.split('/')
-    var dir = this
-    for (segment in segments.dropLast(1)) {
-      dir = dir.findFile(segment)?.takeIf { it.isDirectory }
-        ?: dir.createDirectory(segment)
-        ?: throw IOException("could not create directory $segment")
-    }
-    val name = segments.last()
-    return dir.findFile(name) ?: dir.createFile(OCTET_STREAM, name) ?: throw IOException("could not create $name")
-  }
-
   private suspend fun fetchFile(
     api: MurmurApi,
     transferId: String,
@@ -199,8 +187,6 @@ class MurmurSync(
     }
   }
 
-  private fun safeName(title: String): String = title.replace(Regex("""[/\\:*?"<>|]"""), "_").trim().ifEmpty { "Book" }
-
   private companion object {
     const val OCTET_STREAM = "application/octet-stream"
   }
@@ -222,6 +208,21 @@ class MurmurSync(
     }
   }
 }
+
+/** The document at [path] below this directory, creating it and its parents as needed. */
+internal fun DocumentFile.resolve(path: String): DocumentFile {
+  val segments = path.split('/')
+  var dir = this
+  for (segment in segments.dropLast(1)) {
+    dir = dir.findFile(segment)?.takeIf { it.isDirectory }
+      ?: dir.createDirectory(segment)
+      ?: throw IOException("could not create directory $segment")
+  }
+  val name = segments.last()
+  return dir.findFile(name) ?: dir.createFile("application/octet-stream", name) ?: throw IOException("could not create $name")
+}
+
+internal fun safeName(title: String): String = title.replace(Regex("""[/\\:*?"<>|]"""), "_").trim().ifEmpty { "Book" }
 
 private fun InputStream.skipFully(count: Long) {
   var remaining = count

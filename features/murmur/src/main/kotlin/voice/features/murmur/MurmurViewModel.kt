@@ -27,6 +27,9 @@ data class MurmurViewState(
   val installedVersion: Long?,
   val update: MurmurRelease?,
   val updateDownload: UpdateDownload,
+  val magnet: MagnetState?,
+  /** Fraction downloaded per import in progress; imports not downloading right now are absent. */
+  val importProgress: Map<String, Float>,
 )
 
 @Inject
@@ -36,6 +39,7 @@ class MurmurViewModel(
   private val navigator: Navigator,
   private val sabpImport: SabpImport,
   private val updater: MurmurUpdater,
+  private val magnetImports: MagnetImports,
 ) {
 
   private val scope = MainScope()
@@ -50,6 +54,8 @@ class MurmurViewModel(
     val books by remember { bookRepository.flow() }.collectAsState(initial = emptyList())
     val update by updater.available.collectAsState()
     val updateDownload by updater.download.collectAsState()
+    val importProgress by magnetImports.progress.collectAsState()
+    val magnet by magnetImports.dialog.collectAsState()
     val sharedVoiceIds = settings.shared.values.toSet()
     return MurmurViewState(
       connection = settings.connection,
@@ -62,6 +68,8 @@ class MurmurViewModel(
       installedVersion = updater.installedVersion.takeIf { updater.enabled },
       update = update,
       updateDownload = updateDownload,
+      magnet = magnet,
+      importProgress = importProgress,
     )
   }
 
@@ -116,6 +124,18 @@ class MurmurViewModel(
   fun checkForUpdate() = run {
     if (updater.check() == null) message = "You have the latest version."
   }
+
+  fun openMagnet() = magnetImports.open()
+
+  fun dismissMagnet() = magnetImports.dismiss()
+
+  fun lookUpMagnet(link: String) = magnetImports.lookUp(link)
+
+  fun toggleMagnetBook(index: Int) = magnetImports.toggle(index)
+
+  fun startMagnetImport() = run { magnetImports.startSelected() }
+
+  fun cancelImport(infoHash: String) = run { magnetImports.cancel(infoHash) }
 
   fun dismissError() {
     error = null

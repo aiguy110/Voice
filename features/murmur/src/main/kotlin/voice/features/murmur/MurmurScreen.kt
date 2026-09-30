@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -114,6 +116,8 @@ fun MurmurScreen(modifier: Modifier = Modifier) {
       }
     }
   }
+
+  viewState.magnet?.let { MagnetDialog(it, viewModel) }
 
   viewState.error?.let { error ->
     AlertDialog(
@@ -223,6 +227,16 @@ private fun Library(
       ) { Text("Download folder") }
     }
     item {
+      ListItem(
+        modifier = Modifier.clickable(onClick = viewModel::openMagnet),
+        leadingContent = { Icon(VoiceIcons.Add, contentDescription = null) },
+        supportingContent = { Text("Download audiobooks from a torrent into the download folder") },
+      ) { Text("Add from magnet link") }
+    }
+    items(settings.imports.entries.toList(), key = { it.key }) { (hash, import) ->
+      ImportRow(import, viewState.importProgress[hash]) { viewModel.cancelImport(hash) }
+    }
+    item {
       SwitchRow("Use mobile data", "Send and receive books when not on Wi-Fi", settings.allowMetered, viewModel::setAllowMetered)
     }
     item {
@@ -247,6 +261,114 @@ private fun Library(
     }
     item { Spacer(Modifier.padding(40.dp)) }
   }
+}
+
+@Composable
+private fun ImportRow(
+  import: TorrentImport,
+  progress: Float?,
+  onCancel: () -> Unit,
+) {
+  var confirmCancel by remember { mutableStateOf(false) }
+  if (confirmCancel) {
+    AlertDialog(
+      onDismissRequest = { confirmCancel = false },
+      confirmButton = {
+        TextButton(onClick = {
+          confirmCancel = false
+          onCancel()
+        }) { Text("Stop import") }
+      },
+      dismissButton = { TextButton(onClick = { confirmCancel = false }) { Text("Keep going") } },
+      title = { Text("Stop importing ${import.name}?") },
+      text = { Text("What has downloaded so far is deleted. Books already in your library stay.") },
+    )
+  }
+  val books = import.books.size
+  Column(Modifier.clickable { confirmCancel = true }) {
+    ListItem(
+      leadingContent = { Icon(VoiceIcons.Download, contentDescription = null) },
+      supportingContent = {
+        val status = if (progress == null) "Waiting to download" else "Downloading, ${(progress * 100).toInt()}%"
+        Text("$status · $books book${if (books == 1) "" else "s"} · tap to stop")
+      },
+    ) { Text(import.name) }
+    val modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+    if (progress == null) LinearProgressIndicator(modifier) else LinearProgressIndicator(progress = { progress }, modifier = modifier)
+  }
+}
+
+@Composable
+private fun MagnetDialog(
+  state: MagnetState,
+  viewModel: MurmurViewModel,
+) {
+  val plan = state.plan
+  if (plan == null) {
+    var link by remember { mutableStateOf("") }
+    AlertDialog(
+      onDismissRequest = viewModel::dismissMagnet,
+      confirmButton = {
+        TextButton(onClick = { viewModel.lookUpMagnet(link) }, enabled = !state.lookingUp && link.isNotBlank()) { Text("Look up") }
+      },
+      dismissButton = { TextButton(onClick = viewModel::dismissMagnet) { Text("Cancel") } },
+      title = { Text("Add from magnet link") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          if (state.lookingUp) {
+            Text("Asking the swarm for the torrent's file list. This can take a minute.")
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+          } else {
+            state.error?.let { Text(it) }
+            OutlinedTextField(
+              value = link,
+              onValueChange = { link = it },
+              label = { Text("magnet:?xt=…") },
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+              modifier = Modifier.fillMaxWidth(),
+            )
+          }
+        }
+      },
+    )
+    return
+  }
+  AlertDialog(
+    onDismissRequest = viewModel::dismissMagnet,
+    confirmButton = {
+      TextButton(onClick = viewModel::startMagnetImport, enabled = state.selected.isNotEmpty()) {
+        Text("Import ${state.selected.size}")
+      }
+    },
+    dismissButton = { TextButton(onClick = viewModel::dismissMagnet) { Text("Cancel") } },
+    title = { Text(plan.name) },
+    text = {
+      LazyColumn {
+        itemsIndexed(plan.books) { index, book ->
+          ListItem(
+            modifier = Modifier.clickable { viewModel.toggleMagnetBook(index) },
+            leadingContent = { Checkbox(checked = index in state.selected, onCheckedChange = { viewModel.toggleMagnetBook(index) }) },
+            supportingContent = {
+              val files = book.audio.size
+              val details = listOfNotNull(
+                book.author,
+                book.narrator?.let { "read by $it" },
+                "$files file${if (files == 1) "" else "s"}",
+                formatSize(book.size),
+              ).joinToString(" · ")
+              Text((listOf(details) + book.notes).joinToString("\n"))
+            },
+          ) { Text(book.title) }
+        }
+      }
+    },
+  )
+}
+
+private fun formatSize(bytes: Long): String = when {
+  bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1e9)
+  bytes >= 1_000_000 -> "${bytes / 1_000_000} MB"
+  else -> "${bytes / 1_000} KB"
 }
 
 /** Checks for, downloads, and installs updates, all from the same spot. */

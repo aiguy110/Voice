@@ -53,6 +53,9 @@ sealed interface Destination {
   @Serializable
   data object Murmur : Compose {
     override val trackingName: String get() = "Murmur"
+
+    /** Launch-intent action that opens the app on this screen. */
+    const val OPEN_ACTION: String = "voice.murmur.OPEN"
   }
 
   @Serializable

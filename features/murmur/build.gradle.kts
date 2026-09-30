@@ -9,6 +9,9 @@ android {
   androidResources {
     enable = true
   }
+  defaultConfig {
+    consumerProguardFiles("consumer-rules.pro")
+  }
 }
 
 dependencies {
@@ -23,6 +26,10 @@ dependencies {
 
   implementation(libs.datastore)
   implementation(libs.documentFile)
+  implementation(libs.libtorrent4j)
+  runtimeOnly(libs.libtorrent4j.arm)
+  runtimeOnly(libs.libtorrent4j.arm64)
+  runtimeOnly(libs.libtorrent4j.x64)
   implementation(libs.okhttp)
   implementation(libs.serialization.json)
   implementation(libs.work.runtime)

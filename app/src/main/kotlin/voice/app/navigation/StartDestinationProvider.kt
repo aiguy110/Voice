@@ -44,6 +44,9 @@ class StartDestinationProvider(
         return listOf(Destination.BookOverview, Destination.Playback(bookId))
       }
     }
+    if (intent.action == Destination.Murmur.OPEN_ACTION) {
+      return listOf(Destination.BookOverview, Destination.Murmur)
+    }
     return listOf(Destination.BookOverview)
   }
 
