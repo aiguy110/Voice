@@ -208,6 +208,26 @@ class MediaScannerTest {
     assertEquals(expected = 4, actual = scannedBooks.size)
   }
 
+  @Test
+  fun scanSmart() = test {
+    val audioBooks = folder("audiobooks")
+
+    val book1 = File(audioBooks, "Author/Book One")
+    val book1Chapter1 = audioFile(File(book1, "CD 1"), "01.mp3")
+    val book1Chapter2 = audioFile(File(book1, "CD 2"), "01.mp3")
+
+    val book2 = File(audioBooks, "Author/Series/Book Two")
+    val book2Chapter1 = audioFile(book2, "c1.mp3")
+
+    File(audioBooks, "Statistics").mkdirs()
+
+    scan(FolderType.Smart, audioBooks)
+    assertBookContents(
+      BookContentView(book1, chapters = listOf(book1Chapter1, book1Chapter2)),
+      BookContentView(book2, chapters = listOf(book2Chapter1)),
+    )
+  }
+
   private fun test(test: suspend TestEnvironment.() -> Unit) {
     runTest {
       TestEnvironment().use { test(it) }

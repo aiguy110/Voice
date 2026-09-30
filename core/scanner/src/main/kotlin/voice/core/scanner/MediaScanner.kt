@@ -5,6 +5,8 @@ import voice.core.data.BookId
 import voice.core.data.audioFileCount
 import voice.core.data.folders.FolderType
 import voice.core.data.isAudioFile
+import voice.core.data.layout.detectBooks
+import voice.core.data.layout.toLayoutNode
 import voice.core.data.repo.BookContentRepo
 import voice.core.documentfile.CachedDocumentFile
 import voice.core.documentfile.walk
@@ -38,6 +40,11 @@ internal class MediaScanner(
                 author.children
               }
             }
+          }
+        }
+        FolderType.Smart -> {
+          files.flatMap { folder ->
+            detectBooks(folder.toLayoutNode()).mapNotNull { it.root.value }
           }
         }
       }

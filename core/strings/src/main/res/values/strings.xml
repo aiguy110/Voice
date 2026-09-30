@@ -111,6 +111,8 @@
     <string name="folder.mode.root.title">Top-Level Book Mode: Subfolders are books</string>
     <!-- Title for folder mode where the selected folder is one book. -->
     <string name="folder.mode.single.title">Single Book Mode: One folder equals one book.</string>
+    <!-- Title for folder mode where Voice works out which folders and files are books from the whole tree. -->
+    <string name="folder.mode.smart.title">Smart Import: Voice finds the books, however the folders are arranged.</string>
     <!-- Empty-state message when no books are detected from selected files. -->
     <string name="folder.type.book_example.empty">Voice could not detect any books. Are there any audio files?</string>
     <!-- Header above the preview of books detected from a folder structure. -->

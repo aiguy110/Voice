@@ -40,6 +40,13 @@ public interface AudiobookFoldersGraph {
   private fun authorAudiobookFolders(factory: VoiceDataStoreFactory): DataStore<Set<Uri>> {
     return factory.createUriSet("AuthorAudiobookFolders")
   }
+
+  @Provides
+  @SingleIn(AppScope::class)
+  @SmartAudiobookFoldersStore
+  private fun smartAudiobookFolders(factory: VoiceDataStoreFactory): DataStore<Set<Uri>> {
+    return factory.createUriSet("SmartAudiobookFolders")
+  }
 }
 
 private fun VoiceDataStoreFactory.createUriSet(name: String): DataStore<Set<Uri>> = create(

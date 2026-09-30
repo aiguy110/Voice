@@ -18,6 +18,8 @@ import voice.core.data.audioFileCount
 import voice.core.data.folders.AudiobookFolders
 import voice.core.data.folders.FolderType
 import voice.core.data.isAudioFile
+import voice.core.data.layout.detectBooks
+import voice.core.data.layout.toLayoutNode
 import voice.core.documentfile.CachedDocumentFile
 import voice.core.documentfile.CachedDocumentFileFactory
 import voice.core.documentfile.nameWithoutExtension
@@ -72,6 +74,7 @@ class SelectFolderTypeViewModel(
         FolderMode.Audiobooks -> FolderType.Root
         FolderMode.SingleBook -> FolderType.SingleFolder
         FolderMode.Authors -> FolderType.Author
+        FolderMode.Smart -> FolderType.Smart
         null -> error("Add should not be clickable at this point")
       },
     )
@@ -135,6 +138,14 @@ class SelectFolderTypeViewModel(
                   )
                 }
               }
+            }
+          }
+          FolderMode.Smart -> {
+            detectBooks(documentFile.toLayoutNode()).map { book ->
+              SelectFolderTypeViewState.Book(
+                name = book.author?.let { "${book.title} ($it)" } ?: book.title,
+                fileCount = book.audio.size,
+              )
             }
           }
         }

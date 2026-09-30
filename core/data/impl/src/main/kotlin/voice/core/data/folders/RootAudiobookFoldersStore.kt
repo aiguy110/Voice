@@ -13,3 +13,6 @@ internal annotation class SingleFileAudiobookFoldersStore
 
 @Qualifier
 internal annotation class AuthorAudiobookFoldersStore
+
+@Qualifier
+internal annotation class SmartAudiobookFoldersStore

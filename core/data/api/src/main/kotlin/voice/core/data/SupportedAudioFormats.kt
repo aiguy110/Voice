@@ -34,9 +34,10 @@ private val supportedAudioFormats = setOf(
 public fun CachedDocumentFile.isAudioFile(): Boolean {
   if (!isFile) return false
   val name = name ?: return false
-  val extension = name.substringAfterLast(".").lowercase()
-  return extension in supportedAudioFormats
+  return isAudioFileName(name)
 }
+
+public fun isAudioFileName(name: String): Boolean = name.substringAfterLast(".").lowercase() in supportedAudioFormats
 
 public fun CachedDocumentFile.audioFileCount(): Int {
   return if (isAudioFile()) {

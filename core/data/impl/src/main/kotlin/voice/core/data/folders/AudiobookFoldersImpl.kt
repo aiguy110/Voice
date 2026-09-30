@@ -29,6 +29,8 @@ internal constructor(
   private val singleFileAudiobookFoldersStore: DataStore<Set<@JvmSuppressWildcards Uri>>,
   @AuthorAudiobookFoldersStore
   private val authorAudiobookFoldersStore: DataStore<Set<@JvmSuppressWildcards Uri>>,
+  @SmartAudiobookFoldersStore
+  private val smartAudiobookFoldersStore: DataStore<Set<@JvmSuppressWildcards Uri>>,
   private val context: Context,
   private val cachedDocumentFileFactory: CachedDocumentFileFactory,
   private val analytics: Analytics,
@@ -64,6 +66,7 @@ internal constructor(
       FolderType.SingleFolder,
       FolderType.Root,
       FolderType.Author,
+      FolderType.Smart,
       -> {
         DocumentsContract.buildDocumentUriUsingTree(
           this,
@@ -120,6 +123,7 @@ internal constructor(
       FolderType.SingleFolder -> singleFolderAudiobookFoldersStore
       FolderType.Root -> rootAudioBookFoldersStore
       FolderType.Author -> authorAudiobookFoldersStore
+      FolderType.Smart -> smartAudiobookFoldersStore
     }
   }
 

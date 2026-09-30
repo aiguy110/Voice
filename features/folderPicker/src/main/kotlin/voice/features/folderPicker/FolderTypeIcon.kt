@@ -21,6 +21,7 @@ private fun FolderType.icon(): ImageVector = when (this) {
   FolderType.SingleFolder -> VoiceIcons.Folder
   FolderType.Root -> VoiceIcons.LibraryBooks
   FolderType.Author -> VoiceIcons.Person
+  FolderType.Smart -> VoiceIcons.AutoAwesome
 }
 
 @Composable
@@ -31,6 +32,7 @@ private fun FolderType.contentDescription(): String {
     -> StringsR.string.folder_mode_single_title
     FolderType.Root -> StringsR.string.folder_mode_root_title
     FolderType.Author -> StringsR.string.folder_mode_author_title
+    FolderType.Smart -> StringsR.string.folder_mode_smart_title
   }
   return stringResource(res)
 }

@@ -73,6 +73,7 @@ private fun FolderModeColumn(
         FolderMode.Audiobooks -> FolderType.Root
         FolderMode.SingleBook -> FolderType.SingleFolder
         FolderMode.Authors -> FolderType.Author
+        FolderMode.Smart -> FolderType.Smart
       },
     )
   }
@@ -84,6 +85,7 @@ private fun FolderMode.title(): Int {
     FolderMode.Audiobooks -> StringsR.string.folder_mode_root_title
     FolderMode.SingleBook -> StringsR.string.folder_mode_single_title
     FolderMode.Authors -> StringsR.string.folder_mode_author_title
+    FolderMode.Smart -> StringsR.string.folder_mode_smart_title
   }
 }
 

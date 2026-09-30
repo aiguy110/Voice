@@ -4,4 +4,5 @@ internal enum class FolderMode {
   Audiobooks,
   SingleBook,
   Authors,
+  Smart,
 }

@@ -5,4 +5,7 @@ public enum class FolderType {
   SingleFolder,
   Root,
   Author,
+
+  /** Books are wherever [voice.core.data.layout.detectBooks] finds them, whatever the folder layout. */
+  Smart,
 }
