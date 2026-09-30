@@ -8,6 +8,17 @@ import kotlin.test.assertEquals
 class BookOverviewCategoryTest {
 
   @Test
+  fun `finished books are naturally sorted by name`() {
+    val book11 = book(name = "11 Knife of Dreams")
+    val book2 = book(name = "02 The Great Hunt")
+
+    assertEquals(
+      expected = listOf(book2, book11),
+      actual = listOf(book11, book2).sortedWith(BookOverviewCategory.FINISHED.comparator),
+    )
+  }
+
+  @Test
   fun finished() {
     val book = book().let { book ->
       val lastChapter = book.chapters.last()

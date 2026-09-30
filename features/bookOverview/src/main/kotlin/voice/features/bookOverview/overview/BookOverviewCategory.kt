@@ -20,7 +20,7 @@ enum class BookOverviewCategory(
   ),
   FINISHED(
     nameRes = StringsR.string.library_category_completed_title,
-    comparator = BookComparator.ByLastPlayed,
+    comparator = BookComparator.ByName,
   ),
 }
 
