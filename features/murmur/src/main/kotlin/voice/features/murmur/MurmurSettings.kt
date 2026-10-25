@@ -40,6 +40,8 @@ data class MurmurSettings(
   val updateNotified: Long = 0,
   /** Magnet imports still downloading or being moved into the download folder, by info hash. */
   val imports: Map<String, TorrentImport> = emptyMap(),
+  /** Requested magnets waiting for metadata or for the user to choose books, by info hash. */
+  val magnets: Map<String, PendingMagnet> = emptyMap(),
 ) {
   val connection: Connection?
     get() = if (serverUrl != null && token != null && username != null) Connection(serverUrl, token, username) else null
@@ -49,6 +51,17 @@ data class MurmurSettings(
     val token: String,
     val username: String,
   )
+}
+
+@Serializable
+data class PendingMagnet(
+  val magnet: String,
+  val name: String,
+  val ready: Boolean = false,
+  val error: String? = null,
+  val lastAttempt: Long = 0,
+) {
+  fun shouldRetry(now: Long): Boolean = !ready && (lastAttempt == 0L || now - lastAttempt >= 15 * 60 * 1000)
 }
 
 /**

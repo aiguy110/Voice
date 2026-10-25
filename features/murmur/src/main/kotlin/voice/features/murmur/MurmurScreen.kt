@@ -227,6 +227,21 @@ private fun Library(
         supportingContent = { Text("Download audiobooks from a torrent into the download folder") },
       ) { Text("Add from magnet link") }
     }
+    items(settings.magnets.entries.toList(), key = { "magnet-${it.key}" }) { (hash, request) ->
+      ListItem(
+        modifier = Modifier.clickable { viewModel.lookUpMagnet(request.magnet) },
+        supportingContent = {
+          Text(
+            if (request.ready) {
+              request.error ?: "Ready — tap to choose books"
+            } else {
+              "Waiting for file list; retries periodically. ${request.error.orEmpty()}"
+            },
+          )
+        },
+        trailingContent = { TextButton(onClick = { viewModel.cancelImport(hash) }) { Text("Cancel") } },
+      ) { Text(request.name) }
+    }
     items(settings.imports.entries.toList(), key = { it.key }) { (hash, import) ->
       ImportRow(import, viewState.importProgress[hash]) { viewModel.cancelImport(hash) }
     }
@@ -348,12 +363,12 @@ private fun MagnetDialog(
       confirmButton = {
         TextButton(onClick = { viewModel.lookUpMagnet(link) }, enabled = !state.lookingUp && link.isNotBlank()) { Text("Look up") }
       },
-      dismissButton = { TextButton(onClick = viewModel::dismissMagnet) { Text("Cancel") } },
+      dismissButton = { TextButton(onClick = viewModel::dismissMagnet) { Text("Close") } },
       title = { Text("Add from magnet link") },
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
           if (state.lookingUp) {
-            Text("Asking the swarm for the torrent's file list. This can take a minute.")
+            Text("Link saved. Asking the swarm for its file list; you can close this dialog and it will keep retrying periodically.")
             LinearProgressIndicator(Modifier.fillMaxWidth())
           } else {
             state.error?.let { Text(it) }
@@ -377,7 +392,7 @@ private fun MagnetDialog(
         Text("Import ${state.selected.size}")
       }
     },
-    dismissButton = { TextButton(onClick = viewModel::dismissMagnet) { Text("Cancel") } },
+    dismissButton = { TextButton(onClick = viewModel::dismissMagnet) { Text("Close") } },
     title = { Text(plan.name) },
     text = {
       LazyColumn {

@@ -30,3 +30,6 @@
   `source` sent when the user shares it. Imports never touch the Murmur server otherwise. Pending imports live in
   `MurmurSettings.imports` and resume on the next sync. The lookup dialog's state lives in `MagnetImports` because `MagnetLinkActivity`
   (the `magnet:` intent filter) restarts the app on the Murmur screen via `Destination.Murmur.OPEN_ACTION`.
+  Links are saved before metadata lookup in `MurmurSettings.magnets`, keyed by info hash. Sync retries unresolved requests on allowed
+  networks after 15 minutes (at most three per run, oldest attempt first); resolved metadata stays in the torrent cache until the user
+  chooses books. Closing the dialog preserves the request; Cancel on its settings row removes it.

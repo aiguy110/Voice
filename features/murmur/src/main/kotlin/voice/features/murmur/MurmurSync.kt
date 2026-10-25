@@ -23,17 +23,22 @@ class MurmurSync(
   private val bookTorrents: BookTorrents,
   private val torrents: MurmurTorrents,
   private val scheduler: MurmurScheduler,
+  private val magnetImports: MagnetImports,
 ) {
 
   private val mutex = Mutex()
 
   suspend fun sync(): Unit = mutex.withLock {
-    val settings = settingsStore.data.first()
-    settings.connection?.let { connection ->
-      repository.refreshLibrary()
-      announceTorrents(MurmurApi(connection.serverUrl, connection.token), settings)
+    try {
+      val settings = settingsStore.data.first()
+      settings.connection?.let { connection ->
+        repository.refreshLibrary()
+        announceTorrents(MurmurApi(connection.serverUrl, connection.token), settings)
+      }
+      if (torrents.hasWork()) scheduler.torrentsNow()
+    } finally {
+      magnetImports.retryPending()
     }
-    if (torrents.hasWork()) scheduler.torrentsNow()
   }
 
   /**

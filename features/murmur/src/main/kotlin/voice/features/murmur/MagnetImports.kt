@@ -1,6 +1,10 @@
 package voice.features.murmur
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Uri
+import android.util.AtomicFile
+import androidx.core.content.getSystemService
 import androidx.datastore.core.DataStore
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -13,6 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.TorrentHandle
@@ -72,6 +78,7 @@ class MagnetImports(
 
   private val scope = MainScope()
   private var lookup: Job? = null
+  private val lookupMutex = Mutex()
 
   /** Torrents of pending imports in the current session, by info hash. */
   private val handles = mutableMapOf<String, TorrentHandle>()
@@ -93,8 +100,14 @@ class MagnetImports(
       val state = try {
         val link = magnet.trim()
         require(link.startsWith("magnet:?", ignoreCase = true)) { "That isn't a magnet link." }
-        Logger.i("Murmur: looking up $link")
-        val plan = plan(link, engine.metadata(link))
+        val hash = requireNotNull(TorrentInfoHash.of(link)) { "That magnet link needs a valid BitTorrent v1 info hash." }
+        settingsStore.updateData { settings ->
+          val name = Uri.parse("https://magnet/?" + link.substringAfter('?')).getQueryParameter("dn") ?: hash
+          val request = settings.magnets[hash] ?: PendingMagnet(link, name)
+          settings.copy(magnets = settings.magnets + (hash to request))
+        }
+        scheduler.syncNow()
+        val plan = checkNotNull(resolve(hash, link))
         Logger.i("Murmur: ${plan.name} holds ${plan.books.size} books")
         if (plan.books.isEmpty()) {
           MagnetState(
@@ -111,6 +124,57 @@ class MagnetImports(
       }
       if (dialog.value != null) dialog.value = state
     }
+  }
+
+  private suspend fun resolve(
+    hash: String,
+    link: String,
+    onlyIfDue: Boolean = false,
+  ): MagnetPlan? = lookupMutex.withLock {
+    if (onlyIfDue && settingsStore.data.first().magnets[hash]?.shouldRetry(System.currentTimeMillis()) != true) return@withLock null
+    try {
+      Logger.i("Murmur: looking up magnet $hash")
+      val file = torrentFile(hash)
+      val bytes = withContext(Dispatchers.IO) { if (file.exists()) AtomicFile(file).openRead().use { it.readBytes() } else null }
+        ?: engine.metadata(link)
+      val result = plan(link, bytes)
+      saveTorrent(hash, bytes)
+      settingsStore.updateData { settings ->
+        val request = settings.magnets[hash] ?: return@updateData settings
+        val updated = request.copy(
+          name = result.name,
+          ready = true,
+          error = if (result.books.isEmpty()) "No audiobooks found." else null,
+          lastAttempt = System.currentTimeMillis(),
+        )
+        settings.copy(magnets = settings.magnets + (hash to updated))
+      }
+      result
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      settingsStore.updateData { settings ->
+        val request = settings.magnets[hash] ?: return@updateData settings
+        settings.copy(magnets = settings.magnets + (hash to request.copy(error = e.message, lastAttempt = System.currentTimeMillis())))
+      }
+      throw e
+    }
+  }
+
+  /** One bounded lookup per request every sync; a failed swarm never loses the request. */
+  suspend fun retryPending() {
+    val settings = settingsStore.data.first()
+    if (!settings.allowMetered && context.getSystemService<ConnectivityManager>()?.isActiveNetworkMetered != false) return
+    settings.magnets.entries.sortedBy { it.value.lastAttempt }
+      .filter { it.value.shouldRetry(System.currentTimeMillis()) }.take(3).forEach { (hash, request) ->
+        try {
+          val _ = resolve(hash, request.magnet, onlyIfDue = true)
+        } catch (e: CancellationException) {
+          throw e
+        } catch (e: Exception) {
+          Logger.w(e, "Murmur: saved magnet lookup will retry")
+        }
+      }
   }
 
   fun toggle(index: Int) {
@@ -131,9 +195,7 @@ class MagnetImports(
   ) {
     require(books.isNotEmpty()) { "Choose at least one book." }
     val _ = downloadDir(settingsStore.data.first(), context)
-    withContext(Dispatchers.IO) {
-      torrentFile(plan.infoHash).apply { parentFile?.mkdirs() }.writeBytes(plan.torrent)
-    }
+    saveTorrent(plan.infoHash, plan.torrent)
     val info = TorrentInfo(plan.torrent)
     val files = info.files()
     fun importFile(
@@ -151,13 +213,13 @@ class MagnetImports(
         ImportBook(title = book.title, author = book.author, files = audio + listOfNotNull(cover))
       },
     )
-    settingsStore.updateData { it.copy(imports = it.imports + (plan.infoHash to import)) }
+    settingsStore.updateData { it.copy(imports = it.imports + (plan.infoHash to import), magnets = it.magnets - plan.infoHash) }
     Logger.i("Murmur: importing ${books.size} books from ${plan.name}")
     scheduler.torrentsNow()
   }
 
   suspend fun cancel(infoHash: String) {
-    settingsStore.updateData { it.copy(imports = it.imports - infoHash) }
+    settingsStore.updateData { it.copy(imports = it.imports - infoHash, magnets = it.magnets - infoHash) }
     // A running session notices on its next pass and cleans up; otherwise clean up here.
     if (infoHash !in handles) deleteIncoming(infoHash)
   }
@@ -249,6 +311,23 @@ class MagnetImports(
 
   /** The torrent's metadata, kept after the import so its books can seed the public swarm. */
   fun torrentFile(hash: String) = File(context.filesDir, "murmur/torrents/$hash.torrent")
+
+  private suspend fun saveTorrent(
+    hash: String,
+    bytes: ByteArray,
+  ) {
+    withContext(Dispatchers.IO) {
+      val file = AtomicFile(torrentFile(hash).apply { parentFile?.mkdirs() })
+      val output = file.startWrite()
+      try {
+        output.write(bytes)
+        file.finishWrite(output)
+      } catch (e: Exception) {
+        file.failWrite(output)
+        throw e
+      }
+    }
+  }
 
   private suspend fun deleteIncoming(hash: String) {
     withContext(Dispatchers.IO) {
