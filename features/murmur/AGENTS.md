@@ -18,6 +18,10 @@
   (or the want withdrawn); `/me/requests` books seed now; on Wi-Fi (and charging, by default) every shared book seeds, as does each
   imported book's public torrent. A wanted book nobody holds and the server hasn't cached comes from its public source instead.
   Everything must stay resumable and idempotent: the worker can be killed at any point.
+- Private book torrents use `BookTracker` (OkHttp/Android TLS) for announces and inject compact IPv4/IPv6 peers into libtorrent.
+  Native trackers are removed without changing the info bytes; public magnet trackers remain native. This works around libtorrent4j
+  2.1.0-35 HTTPS tracker `init fail (BIO routines)` failures reproduced on a Pixel 10 Pro Fold. Announce keys must never be logged.
+  `BookTracker` writes sanitized peer-discovery diagnostics to Android logcat even in free release builds.
 - Torrents need file paths: `StorageAccess` maps Storage Access Framework uris on device storage to paths, which needs all files
   access (`MANAGE_EXTERNAL_STORAGE`; the storage permission on Android 9-10). Seeding uses libtorrent's seed mode with `renamed_files`
   pointing at the books where Voice has them, so nothing is copied or re-hashed.

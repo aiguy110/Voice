@@ -12,10 +12,15 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.TorrentHandle
@@ -61,70 +66,82 @@ class MurmurTorrents(
   /** Runs the session until there's nothing left to do; [onStatus] describes progress. */
   suspend fun run(onStatus: suspend (String) -> Unit) {
     engine.use { session ->
-      val running = mutableMapOf<String, TorrentHandle>()
-      val announced = mutableSetOf<String>()
-      var plan = Plan()
-      var plannedAt = 0L
-      try {
-        while (true) {
-          if (System.currentTimeMillis() - plannedAt > PLAN_MILLIS) {
-            val next = plan()
-            if (next.torrents.keys != plan.torrents.keys) {
-              Logger.i("Murmur: downloading ${next.downloads.map { it.book.title }}, in session ${next.torrents.values.map { it.name }}")
+      coroutineScope {
+        val running = mutableMapOf<String, TorrentHandle>()
+        val trackers = mutableMapOf<String, Pair<BookTracker, Job>>()
+        suspend fun remove(hash: String) {
+          trackers.remove(hash)?.second?.cancelAndJoin()
+          running.remove(hash)?.let { if (it.isValid) session.remove(it) }
+        }
+        val announced = mutableSetOf<String>()
+        var plan = Plan()
+        var plannedAt = 0L
+        try {
+          while (true) {
+            if (System.currentTimeMillis() - plannedAt > PLAN_MILLIS) {
+              val next = plan()
+              if (next.torrents.keys != plan.torrents.keys) {
+                Logger.i("Murmur: downloading ${next.downloads.map { it.book.title }}, in session ${next.torrents.values.map { it.name }}")
+              }
+              plan = next
+              plannedAt = System.currentTimeMillis()
             }
-            plan = next
-            plannedAt = System.currentTimeMillis()
-          }
-          (running.keys - plan.torrents.keys).forEach { hash -> running.remove(hash)?.let { session.remove(it) } }
-          // Adding a torrent that another part of the session is still removing (a magnet import that just
-          // finished) returns the dying handle; add it again once it's gone.
-          running.values.removeAll { !it.isValid }
-          plan.torrents.forEach { (hash, torrent) ->
-            if (hash !in running) {
-              running[hash] = try {
-                torrent.add(session)
-              } catch (e: IOException) {
-                Logger.w(e, "Murmur: could not add ${torrent.name}")
-                return@forEach
+            (running.keys - plan.torrents.keys).forEach { hash -> remove(hash) }
+            // Adding a torrent that another part of the session is still removing (a magnet import that just
+            // finished) returns the dying handle; add it again once it's gone.
+            running.filterValues { !it.isValid }.keys.toList().forEach { remove(it) }
+            plan.torrents.forEach { (hash, torrent) ->
+              if (hash !in running) {
+                running[hash] = try {
+                  torrent.add(session)
+                } catch (e: IOException) {
+                  Logger.w(e, "Murmur: could not add ${torrent.name}")
+                  return@forEach
+                }
+                torrent.tracker?.let { tracker ->
+                  val handle = running.getValue(hash)
+                  trackers[hash] = tracker to launch { tracker.run(handle) }
+                }
               }
             }
-          }
-          // The server just started wanting these from us: tell the tracker now rather than at the next interval.
-          announced.retainAll(plan.requested)
-          (plan.requested - announced).forEach { hash ->
-            running[hash]?.let {
-              it.forceReannounce()
-              announced += hash
+            // The server just started wanting these from us: tell the tracker now rather than at the next interval.
+            announced.retainAll(plan.requested)
+            (plan.requested - announced).forEach { hash ->
+              running[hash]?.let {
+                trackers[hash]?.first?.reannounce() ?: it.forceReannounce()
+                announced += hash
+              }
             }
-          }
-          val finished = plan.downloads.filter { running[it.infoHash]?.status()?.isFinished == true }
-          finished.forEach { download ->
-            running.remove(download.infoHash)?.let { session.remove(it) }
-            try {
-              finish(download)
-            } catch (e: IOException) {
-              Logger.w(e, "Murmur: finishing ${download.book.title} failed")
+            val finished = plan.downloads.filter { running[it.infoHash]?.status()?.isFinished == true }
+            finished.forEach { download ->
+              remove(download.infoHash)
+              try {
+                finish(download)
+              } catch (e: IOException) {
+                Logger.w(e, "Murmur: finishing ${download.book.title} failed")
+              }
             }
-          }
-          if (finished.isNotEmpty()) plannedAt = 0
-          downloads.value = plan.downloads.associate { it.book.id to (running[it.infoHash]?.status()?.progress() ?: 0F) }
+            if (finished.isNotEmpty()) plannedAt = 0
+            downloads.value = plan.downloads.associate { it.book.id to (running[it.infoHash]?.status()?.progress() ?: 0F) }
 
-          val imports = try {
-            magnetImports.advance(session)
-          } catch (e: IOException) {
-            Logger.w(e, "Murmur: magnet import failed")
-            null
-          } catch (e: IllegalStateException) {
-            Logger.w(e, "Murmur: magnet import can't run")
-            null
+            val imports = try {
+              magnetImports.advance(session)
+            } catch (e: IOException) {
+              Logger.w(e, "Murmur: magnet import failed")
+              null
+            } catch (e: IllegalStateException) {
+              Logger.w(e, "Murmur: magnet import can't run")
+              null
+            }
+            if (plan.torrents.isEmpty() && imports == null) break
+            onStatus(status(plan, imports))
+            delay(POLL_MILLIS)
           }
-          if (plan.torrents.isEmpty() && imports == null) break
-          onStatus(status(plan, imports))
-          delay(POLL_MILLIS)
+        } finally {
+          withContext(NonCancellable) { running.keys.toList().forEach { remove(it) } }
+          downloads.value = emptyMap()
+          magnetImports.sessionEnded()
         }
-      } finally {
-        downloads.value = emptyMap()
-        magnetImports.sessionEnded()
       }
     }
   }
@@ -189,7 +206,15 @@ class MurmurTorrents(
     if (book.cached || book.holders.isNotEmpty() || !book.source) {
       val bytes = bookTorrents.get(api, book.id) ?: return null
       val info = TorrentInfo(bytes)
-      return Download(book, info.infoHash().toHex(), Torrent(book.title) { engine.add(it, bytes, incoming) }, source = null)
+      val tracker = BookTracker(bytes)
+      return Download(
+        book,
+        info.infoHash().toHex(),
+        Torrent(book.title, tracker) {
+          engine.add(it, tracker.trackerless, incoming)
+        },
+        source = null,
+      )
     }
     val source = api.source(book.id) ?: return null
     val bytes = bookTorrents.public(source.magnet) ?: return null
@@ -223,7 +248,9 @@ class MurmurTorrents(
       paths[index] = file.absolutePath
     }
     val hash = info.infoHash().toHex()
-    return hash to Torrent(info.name()) { engine.add(it, bytes, bookTorrents.partsDir(hash), paths = paths, seed = true) }
+    val tracker = BookTracker(bytes)
+    return hash to
+      Torrent(info.name(), tracker) { engine.add(it, tracker.trackerless, bookTorrents.partsDir(hash), paths = paths, seed = true) }
   }
 
   /** Seeding an imported book's public torrent, with its extra files left out. */
@@ -294,6 +321,7 @@ class MurmurTorrents(
 
   private class Torrent(
     val name: String,
+    val tracker: BookTracker? = null,
     val add: (SessionManager) -> TorrentHandle,
   )
 
