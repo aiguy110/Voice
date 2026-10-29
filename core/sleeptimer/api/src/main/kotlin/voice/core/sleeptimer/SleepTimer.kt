@@ -7,6 +7,7 @@ interface SleepTimer {
   val state: StateFlow<SleepTimerState>
   fun enable(mode: SleepTimerMode)
   fun disable()
+  fun onPlaybackInteraction()
 }
 
 sealed interface SleepTimerState {

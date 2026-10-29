@@ -45,6 +45,7 @@ class SleepTimerImpl internal constructor(
     field = MutableStateFlow<SleepTimerState>(SleepTimerState.Disabled)
 
   private var job: Job? = null
+  private var countdownDuration: Duration? = null
 
   override fun enable(mode: SleepTimerMode) {
     tracker.enabled(mode)
@@ -64,16 +65,30 @@ class SleepTimerImpl internal constructor(
     }
   }
 
+  override fun onPlaybackInteraction() {
+    val activeJob = job ?: return
+    scope.launch {
+      if (sleepTimerPreferenceStore.data.first().resetOnPlaybackInteraction &&
+        job === activeJob && state.value is SleepTimerState.Enabled.WithDuration
+      ) {
+        val duration = countdownDuration ?: return@launch
+        enable(SleepTimerMode.TimedWithDuration(duration))
+      }
+    }
+  }
+
   override fun disable() {
     tracker.disabled()
     job?.cancel()
     job = null
+    countdownDuration = null
     state.value = SleepTimerState.Disabled
     playerController.setVolume(1F)
   }
 
   private tailrec suspend fun startCountdown(duration: Duration) {
     Logger.d("startCountdown(duration=$duration)")
+    countdownDuration = duration
     var left = duration
     state.value = SleepTimerState.Enabled.WithDuration(left)
     playerController.setVolume(1F)

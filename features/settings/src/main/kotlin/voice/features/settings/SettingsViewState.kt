@@ -53,6 +53,7 @@ data class SettingsViewState(
     val enabled: Boolean,
     val startTime: LocalTime,
     val endTime: LocalTime,
+    val resetOnPlaybackInteraction: Boolean = false,
   ) {
     companion object {
       fun preview(): AutoSleepTimerViewState {

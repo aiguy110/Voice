@@ -113,6 +113,29 @@ class VoicePlayerTest {
   )
 
   @Test
+  fun `play pause stop and skip controls notify sleep timer`() = scope.runTest {
+    setMediaItems(listOf(chapter(ChapterMark(startMs = 0, endMs = 30_000, name = null))))
+    player.prepare()
+    awaitReady()
+
+    val controls = listOf<() -> Unit>(
+      { player.play() },
+      { player.pause() },
+      { player.seekBack() },
+      { player.seekForward() },
+      { player.seekToPrevious() },
+      { player.seekToNext() },
+      { player.stop() },
+    )
+    controls.forEach { control ->
+      val before = sleepTimer.playbackInteractions
+      control()
+      runCurrent()
+      assertEquals(before + 1, sleepTimer.playbackInteractions)
+    }
+  }
+
+  @Test
   fun `seekToNext does not clip`() = scope.runTest {
     setMediaItems(
       listOf(
@@ -450,6 +473,12 @@ class VoicePlayerTest {
         SleepTimerMode.TimedWithDefault -> error("TimedWithDefault is not used in these tests")
         SleepTimerMode.EndOfChapter -> SleepTimerState.Enabled.WithEndOfChapter
       }
+    }
+
+    var playbackInteractions = 0
+
+    override fun onPlaybackInteraction() {
+      playbackInteractions++
     }
 
     override fun disable() {

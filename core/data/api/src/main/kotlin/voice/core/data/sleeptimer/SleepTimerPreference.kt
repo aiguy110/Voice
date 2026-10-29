@@ -20,6 +20,7 @@ public data class SleepTimerPreference(
   val autoSleepStartTime: LocalTime,
   @Serializable(with = LocalTimeSerializer::class)
   val autoSleepEndTime: LocalTime,
+  val resetOnPlaybackInteraction: Boolean = false,
 ) {
 
   public companion object {

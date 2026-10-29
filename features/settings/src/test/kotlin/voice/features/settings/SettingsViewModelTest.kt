@@ -76,6 +76,19 @@ class SettingsViewModelTest {
   )
 
   @Test
+  fun `reset sleep timer preference is persisted and reflected in settings`() = scope.runTest {
+    backgroundScope.launchMolecule(RecompositionMode.Immediate) {
+      viewModel.viewState()
+    }.test {
+      assertEquals(false, awaitItem().autoSleepTimer.resetOnPlaybackInteraction)
+      viewModel.setResetSleepTimerOnPlaybackInteraction(true)
+      assertEquals(true, awaitItem().autoSleepTimer.resetOnPlaybackInteraction)
+      viewModel.setResetSleepTimerOnPlaybackInteraction(false)
+      assertEquals(false, awaitItem().autoSleepTimer.resetOnPlaybackInteraction)
+    }
+  }
+
+  @Test
   fun `view state defaults to follow system and voice blue`() = scope.runTest {
     backgroundScope.launchMolecule(RecompositionMode.Immediate) {
       viewModel.viewState()

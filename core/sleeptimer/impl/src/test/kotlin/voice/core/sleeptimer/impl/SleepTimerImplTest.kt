@@ -163,6 +163,73 @@ class SleepTimerImplTest {
     assertEquals(expected = SleepTimerState.Disabled, actual = sleepTimer.state.value)
   }
 
+  @Test
+  fun `interaction restores original duration and volume during fade out`() = testScope.runTest {
+    sleepTimerPreferenceStore.updateData { it.copy(resetOnPlaybackInteraction = true) }
+    sleepTimer.enable(SleepTimerMode.TimedWithDuration(5.seconds))
+    advanceTimeBy(4.seconds)
+    runCurrent()
+    assertTrue(setVolumeSlots.last() < 1F)
+
+    sleepTimer.onPlaybackInteraction()
+    runCurrent()
+
+    assertEquals(SleepTimerState.Enabled.WithDuration(5.seconds), sleepTimer.state.value)
+    assertEquals(1F, setVolumeSlots.last())
+    advanceTimeBy(2.seconds)
+    verify(exactly = 0) { playerController.pauseWithRewind(any()) }
+    advanceTimeBy(4.seconds)
+    verify(exactly = 1) { playerController.pauseWithRewind(any()) }
+  }
+
+  @Test
+  fun `interaction leaves countdown unchanged by default`() = testScope.runTest {
+    sleepTimer.enable(SleepTimerMode.TimedWithDuration(5.seconds))
+    advanceTimeBy(2.seconds)
+    runCurrent()
+    val before = sleepTimer.state.value
+    sleepTimer.onPlaybackInteraction()
+    runCurrent()
+    assertEquals(before, sleepTimer.state.value)
+    sleepTimer.disable()
+  }
+
+  @Test
+  fun `interaction resets paused timer and waits for playback`() = testScope.runTest {
+    sleepTimerPreferenceStore.updateData { it.copy(resetOnPlaybackInteraction = true) }
+    sleepTimer.enable(SleepTimerMode.TimedWithDuration(5.seconds))
+    advanceTimeBy(2.seconds)
+    playStateManager.playState = PlayStateManager.PlayState.Paused
+    sleepTimer.onPlaybackInteraction()
+    runCurrent()
+    advanceTimeBy(10.seconds)
+    assertEquals(SleepTimerState.Enabled.WithDuration(5.seconds), sleepTimer.state.value)
+    playStateManager.playState = PlayStateManager.PlayState.Playing
+    advanceTimeBy(2.seconds)
+    runCurrent()
+    assertEquals(SleepTimerState.Enabled.WithDuration(3.seconds), sleepTimer.state.value)
+    sleepTimer.disable()
+  }
+
+  @Test
+  fun `interaction never enables disabled expired or end of chapter timers`() = testScope.runTest {
+    sleepTimerPreferenceStore.updateData { it.copy(resetOnPlaybackInteraction = true) }
+    sleepTimer.onPlaybackInteraction()
+    runCurrent()
+    assertEquals(SleepTimerState.Disabled, sleepTimer.state.value)
+    sleepTimer.enable(SleepTimerMode.EndOfChapter)
+    runCurrent()
+    sleepTimer.onPlaybackInteraction()
+    runCurrent()
+    assertEquals(SleepTimerState.Enabled.WithEndOfChapter, sleepTimer.state.value)
+    sleepTimer.enable(SleepTimerMode.TimedWithDuration(1.seconds))
+    advanceTimeBy(2.seconds)
+    sleepTimer.onPlaybackInteraction()
+    runCurrent()
+    assertEquals(SleepTimerState.Disabled, sleepTimer.state.value)
+    advanceTimeBy(SleepTimerImpl.SHAKE_TO_RESET_TIME)
+  }
+
   companion object {
 
     @BeforeClass

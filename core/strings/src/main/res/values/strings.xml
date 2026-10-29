@@ -301,4 +301,6 @@
     <string name="sleep_timer.dialog.title">Sweet dreams! 🌙</string>
     <!-- Sleep timer option and playback status for stopping at the end of a chapter. -->
     <string name="sleep_timer.end_of_chapter">End of Chapter</string>
+  <string name="settings_sleep_reset_title">Reset sleep timer on playback controls</string>
+  <string name="settings_sleep_reset_summary">Restart the active countdown when you play, pause, stop, rewind, or fast-forward.</string>
 </resources>

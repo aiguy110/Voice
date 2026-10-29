@@ -22,6 +22,7 @@ interface SettingsListener {
   fun openTranslations()
   fun openFaq()
   fun openSupportVoice()
+  fun setResetSleepTimerOnPlaybackInteraction(checked: Boolean)
   fun setAutoSleepTimer(checked: Boolean)
   fun setAutoSleepTimerStart(time: LocalTime)
   fun setAutoSleepTimerEnd(time: LocalTime)
@@ -51,6 +52,7 @@ interface SettingsListener {
       override fun openTranslations() {}
       override fun openFaq() {}
       override fun openSupportVoice() {}
+      override fun setResetSleepTimerOnPlaybackInteraction(checked: Boolean) {}
       override fun setAutoSleepTimer(checked: Boolean) {}
       override fun setAutoSleepTimerStart(time: LocalTime) {}
       override fun setAutoSleepTimerEnd(time: LocalTime) {}

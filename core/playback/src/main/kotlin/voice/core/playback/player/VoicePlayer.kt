@@ -81,6 +81,7 @@ class VoicePlayer(
   }
 
   fun forceSeekToNext() {
+    sleepTimer.onPlaybackInteraction()
     scope.launch {
       val nextMediaItemIndex = player.nextMediaItemIndex.takeUnless { it == C.INDEX_UNSET }
         ?: return@launch
@@ -89,6 +90,7 @@ class VoicePlayer(
   }
 
   fun forceSeekToPrevious() {
+    sleepTimer.onPlaybackInteraction()
     scope.launch {
       val currentPosition = player.currentPosition
       if (currentPosition > THRESHOLD_FOR_BACK_SEEK_MS) {
@@ -140,6 +142,7 @@ class VoicePlayer(
   }
 
   override fun seekBack() {
+    sleepTimer.onPlaybackInteraction()
     scope.launch {
       seekBackBy(seekTimeStore.data.first().seconds)
     }
@@ -183,6 +186,7 @@ class VoicePlayer(
   }
 
   override fun seekForward() {
+    sleepTimer.onPlaybackInteraction()
     scope.launch {
       val skipAmount = seekTimeStore.data.first().seconds
 
@@ -206,11 +210,17 @@ class VoicePlayer(
     }
   }
 
+  override fun stop() {
+    sleepTimer.onPlaybackInteraction()
+    super.stop()
+  }
+
   override fun play() {
     playWhenReady = true
   }
 
   override fun setPlayWhenReady(playWhenReady: Boolean) {
+    sleepTimer.onPlaybackInteraction()
     Logger.d("setPlayWhenReady=$playWhenReady")
     analytics.event(if (playWhenReady) "play" else "pause")
 

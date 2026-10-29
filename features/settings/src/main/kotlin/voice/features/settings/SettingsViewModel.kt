@@ -104,6 +104,7 @@ class SettingsViewModel(
         enabled = autoSleepTimer.autoSleepTimerEnabled,
         startTime = autoSleepTimer.autoSleepStartTime,
         endTime = autoSleepTimer.autoSleepEndTime,
+        resetOnPlaybackInteraction = autoSleepTimer.resetOnPlaybackInteraction,
       ),
       analyticsEnabled = analyticsEnabled,
       showAnalyticSetting = appInfoProvider.analyticsIncluded,
@@ -217,6 +218,12 @@ class SettingsViewModel(
 
   override fun openFolderPicker() {
     navigator.goTo(Destination.FolderPicker)
+  }
+
+  override fun setResetSleepTimerOnPlaybackInteraction(checked: Boolean) {
+    mainScope.launch {
+      sleepTimerPreferenceStore.updateData { it.copy(resetOnPlaybackInteraction = checked) }
+    }
   }
 
   override fun setAutoSleepTimer(checked: Boolean) {
