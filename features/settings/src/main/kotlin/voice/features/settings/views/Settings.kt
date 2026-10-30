@@ -179,23 +179,6 @@ private fun Settings(
         AutoSleepTimerCard(viewState.autoSleepTimer, listener)
       }
 
-      item {
-        ListItem(
-          modifier = Modifier.clickable {
-            listener.setResetSleepTimerOnPlaybackInteraction(!viewState.autoSleepTimer.resetOnPlaybackInteraction)
-          },
-          supportingContent = { Text(stringResource(StringsR.string.settings_sleep_reset_summary)) },
-          trailingContent = {
-            Switch(
-              checked = viewState.autoSleepTimer.resetOnPlaybackInteraction,
-              onCheckedChange = listener::setResetSleepTimerOnPlaybackInteraction,
-            )
-          },
-        ) {
-          Text(stringResource(StringsR.string.settings_sleep_reset_title))
-        }
-      }
-
       if (viewState.showSupportDevelopment) {
         item {
           ListItem(
