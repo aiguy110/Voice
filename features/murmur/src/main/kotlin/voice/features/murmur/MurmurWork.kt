@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import androidx.datastore.core.DataStore
@@ -79,6 +80,7 @@ class TorrentWorker(
 
   override suspend fun doWork(): Result {
     val torrents = rootGraphAs<MurmurGraph>().murmurTorrents
+    foreground("Starting…")
     return try {
       torrents.run { status -> foreground(status) }
       Result.success()
@@ -90,12 +92,21 @@ class TorrentWorker(
 
   override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo("Starting…")
 
+  /** When Android last refused the foreground service, if it did; see [foreground]. */
+  private var refusedAt: Long? = null
+
   private suspend fun foreground(status: String) {
+    val refused = refusedAt
+    if (refused != null && SystemClock.elapsedRealtime() - refused < FOREGROUND_RETRY_MILLIS) return
     try {
       setForeground(foregroundInfo(status))
+      refusedAt = null
     } catch (e: IllegalStateException) {
-      // Started from the background, where Android no longer allows foreground services; carry on without.
-      Logger.w(e, "Murmur: transfers running without a notification")
+      // Started from the background, where Android no longer allows foreground services; carry on without (the
+      // system stops this worker after 10 minutes and the next sync starts another). Retrying is cheap but pointless
+      // until the app comes to the front, so only now and then, and log it once.
+      if (refused == null) Logger.w("Murmur: transfers running without a notification: ${e.message}")
+      refusedAt = SystemClock.elapsedRealtime()
     }
   }
 
@@ -119,6 +130,7 @@ class TorrentWorker(
   private companion object {
     const val CHANNEL_ID = "murmur_transfers"
     const val NOTIFICATION_ID = 0x6d76
+    const val FOREGROUND_RETRY_MILLIS = 60_000L
   }
 }
 

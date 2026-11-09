@@ -258,7 +258,7 @@ class MagnetImports(
   suspend fun advance(session: SessionManager): String? {
     val imports = settingsStore.data.first().imports
     (handles.keys - imports.keys).forEach { cancelled ->
-      handles.remove(cancelled)?.let { session.remove(it) }
+      handles.remove(cancelled)?.let { engine.remove(session, cancelled, it) }
       deleteIncoming(cancelled)
       progress.value -= cancelled
     }
@@ -284,7 +284,7 @@ class MagnetImports(
       val have = wanted.sumOf { minOf(done[it.index], it.size) }
       progress.value += hash to have.toFloat() / total
       if (wanted.all { done[it.index] >= it.size }) {
-        handles.remove(hash)?.let { session.remove(it) }
+        handles.remove(hash)?.let { engine.remove(session, hash, it) }
         finish(folder, hash, import)
         deleteIncoming(hash)
         settingsStore.updateData { it.copy(imports = it.imports - hash) }
@@ -373,6 +373,7 @@ class MagnetImports(
 
   private suspend fun deleteIncoming(hash: String) {
     withContext(Dispatchers.IO) {
+      engine.forget(hash)
       stagingDir(hash).deleteRecursively()
       val _ = runCatching { incoming(downloadDir(settingsStore.data.first(), context), hash).deleteRecursively() }
       if (settingsStore.data.first().imported.values.none { it.infoHash == hash }) torrentFile(hash).delete()

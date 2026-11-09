@@ -71,11 +71,12 @@ class MurmurTorrents(
         val trackers = mutableMapOf<String, Pair<BookTracker, Job>>()
         suspend fun remove(hash: String) {
           trackers.remove(hash)?.second?.cancelAndJoin()
-          running.remove(hash)?.let { if (it.isValid) session.remove(it) }
+          running.remove(hash)?.let { engine.remove(session, hash, it) }
         }
         val announced = mutableSetOf<String>()
         var plan = Plan()
         var plannedAt = 0L
+        var passes = 0
         try {
           while (true) {
             if (System.currentTimeMillis() - plannedAt > PLAN_MILLIS) {
@@ -119,6 +120,8 @@ class MurmurTorrents(
                 finish(download)
               } catch (e: IOException) {
                 Logger.w(e, "Murmur: finishing ${download.book.title} failed")
+              } finally {
+                engine.forget(download.infoHash)
               }
             }
             if (finished.isNotEmpty()) plannedAt = 0
@@ -137,6 +140,7 @@ class MurmurTorrents(
             }
             if (plan.torrents.isEmpty() && imports == null) break
             onStatus(status(plan, imports))
+            if (++passes % RESUME_SAVE_PASSES == 0) engine.saveResume()
             delay(POLL_MILLIS)
           }
         } finally {
@@ -337,6 +341,9 @@ class MurmurTorrents(
 
   private companion object {
     const val POLL_MILLIS = 3_000L
+
+    /** Saves download progress about once a minute, so a killed session loses little. */
+    const val RESUME_SAVE_PASSES = 20
     const val PLAN_MILLIS = 60_000L
   }
 }
