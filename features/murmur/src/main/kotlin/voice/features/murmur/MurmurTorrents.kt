@@ -128,9 +128,11 @@ class MurmurTorrents(
               magnetImports.advance(session)
             } catch (e: IOException) {
               Logger.w(e, "Murmur: magnet import failed")
+              magnetImports.reportFailure(e)
               null
             } catch (e: IllegalStateException) {
               Logger.w(e, "Murmur: magnet import can't run")
+              magnetImports.reportFailure(e)
               null
             }
             if (plan.torrents.isEmpty() && imports == null) break

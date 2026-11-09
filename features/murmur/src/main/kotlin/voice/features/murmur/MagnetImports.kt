@@ -20,6 +20,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.libtorrent4j.SessionManager
 import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.TorrentInfo
@@ -63,6 +70,7 @@ class MagnetImports(
   private val engine: TorrentEngine,
   private val scheduler: MurmurScheduler,
   private val mediaScanTrigger: MediaScanTrigger,
+  private val reporter: MurmurReporter,
 ) {
 
   /** Fraction downloaded per import, while it's downloading. */
@@ -135,10 +143,11 @@ class MagnetImports(
     try {
       Logger.i("Murmur: looking up magnet $hash")
       val file = torrentFile(hash)
-      val bytes = withContext(Dispatchers.IO) { if (file.exists()) AtomicFile(file).openRead().use { it.readBytes() } else null }
-        ?: engine.metadata(link)
+      val cached = withContext(Dispatchers.IO) { if (file.exists()) AtomicFile(file).openRead().use { it.readBytes() } else null }
+      val bytes = cached ?: engine.metadata(link)
       val result = plan(link, bytes)
       saveTorrent(hash, bytes)
+      reporter.report("magnet_resolved") { magnetResolved(result, fromCache = cached != null) }
       settingsStore.updateData { settings ->
         val request = settings.magnets[hash] ?: return@updateData settings
         val updated = request.copy(
@@ -153,9 +162,18 @@ class MagnetImports(
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {
+      val before = settingsStore.data.first().magnets[hash]
       settingsStore.updateData { settings ->
         val request = settings.magnets[hash] ?: return@updateData settings
         settings.copy(magnets = settings.magnets + (hash to request.copy(error = e.message, lastAttempt = System.currentTimeMillis())))
+      }
+      // Background retries fail the same way every 15 minutes; report a failure only when it changes.
+      if (before?.error != e.message) {
+        reporter.report("magnet_lookup_failed", logs = true) {
+          put("info_hash", hash)
+          put("magnet", link)
+          put("error", e.report())
+        }
       }
       throw e
     }
@@ -215,6 +233,14 @@ class MagnetImports(
     )
     settingsStore.updateData { it.copy(imports = it.imports + (plan.infoHash to import), magnets = it.magnets - plan.infoHash) }
     Logger.i("Murmur: importing ${books.size} books from ${plan.name}")
+    reporter.report("magnet_import_started") {
+      put("info_hash", plan.infoHash)
+      put("name", plan.name)
+      put("download_folder", settingsStore.data.first().downloadFolder)
+      put("detected_books", plan.books.size)
+      put("import", murmurJson.encodeToJsonElement(TorrentImport.serializer(), import))
+      put("skipped", buildJsonArray { plan.books.filterNot { it in books }.forEach { add(JsonPrimitive(it.title)) } })
+    }
     scheduler.torrentsNow()
   }
 
@@ -271,6 +297,14 @@ class MagnetImports(
     }.ifEmpty { null }
   }
 
+  /** Reports a pass of [advance] that threw, once per distinct failure per process; passes repeat every minute. */
+  fun reportFailure(e: Exception) {
+    reporter.reportOnce("import:${e.javaClass.name}:${e.message}", "magnet_import_failed", logs = true) {
+      put("error", e.report())
+      put("imports", murmurJson.encodeToJsonElement(importsSerializer, settingsStore.data.first().imports))
+    }
+  }
+
   /** Forgets the session's torrents once it stops. */
   fun sessionEnded() {
     handles.clear()
@@ -300,6 +334,14 @@ class MagnetImports(
         )
       }
       Logger.i("Murmur: imported ${book.title} from ${import.name}")
+      reporter.report("magnet_book_imported") {
+        put("info_hash", hash)
+        put("name", import.name)
+        put("title", book.title)
+        put("author", book.author)
+        put("target", target.absolutePath)
+        put("tree", fileTree(target, 5_000))
+      }
     }
     mediaScanTrigger.scan()
   }
@@ -336,6 +378,52 @@ class MagnetImports(
       if (settingsStore.data.first().imported.values.none { it.infoHash == hash }) torrentFile(hash).delete()
     }
   }
+}
+
+private val importsSerializer = MapSerializer(String.serializer(), TorrentImport.serializer())
+
+/** A `magnet_resolved` report: the torrent's whole file list and the books [detectBooks] found in it. */
+private fun JsonObjectBuilder.magnetResolved(
+  plan: MagnetPlan,
+  fromCache: Boolean,
+) {
+  val files = TorrentInfo(plan.torrent).files()
+  put("info_hash", plan.infoHash)
+  put("name", plan.name)
+  put("magnet", plan.magnet)
+  put("from_cache", fromCache)
+  put(
+    "files",
+    buildJsonArray {
+      for (i in 0 until files.numFiles()) {
+        if (files.padFileAt(i)) continue
+        add(
+          buildJsonObject {
+            put("index", i)
+            put("path", files.filePath(i).replace('\\', '/'))
+            put("size", files.fileSize(i))
+          },
+        )
+      }
+    },
+  )
+  put(
+    "books",
+    buildJsonArray {
+      plan.books.forEach { book ->
+        add(
+          buildJsonObject {
+            put("title", book.title)
+            put("author", book.author)
+            put("root", book.path.joinToString("/"))
+            put("notes", buildJsonArray { book.notes.forEach { add(JsonPrimitive(it)) } })
+            put("audio", buildJsonArray { book.audio.forEach { add(JsonPrimitive(it.path)) } })
+            put("cover", book.cover?.path)
+          },
+        )
+      }
+    },
+  )
 }
 
 /** Where books are downloaded before they're verified and moved into [folder]. Voice's scanner skips dot folders. */

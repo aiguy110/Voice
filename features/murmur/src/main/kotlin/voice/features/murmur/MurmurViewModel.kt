@@ -40,6 +40,7 @@ class MurmurViewModel(
   private val sabpImport: SabpImport,
   private val updater: MurmurUpdater,
   private val magnetImports: MagnetImports,
+  private val diagnostics: MurmurDiagnostics,
 ) {
 
   private val scope = MainScope()
@@ -112,6 +113,11 @@ class MurmurViewModel(
   fun setSeedOnlyCharging(onlyCharging: Boolean) = run { repository.setSeedOnlyCharging(onlyCharging) }
 
   fun setReportTelemetry(report: Boolean) = run { repository.setReportTelemetry(report) }
+
+  fun sendDiagnostics() = run {
+    diagnostics.send()
+    message = "Sent diagnostics to the Murmur server."
+  }
 
   fun importSabp() = run {
     val result = sabpImport.run()

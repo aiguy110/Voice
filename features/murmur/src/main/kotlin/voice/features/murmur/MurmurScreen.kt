@@ -267,10 +267,17 @@ private fun Library(
     item {
       SwitchRow(
         "Report app telemetry to Murmur server",
-        "Send the folder and file names of folders you add, to help diagnose library problems",
+        "Send the file names of folders you add and of magnet imports, and import errors, to help diagnose library problems",
         settings.reportTelemetry,
         viewModel::setReportTelemetry,
       )
+    }
+    item {
+      ListItem(
+        modifier = Modifier.clickable(enabled = !viewState.busy, onClick = viewModel::sendDiagnostics),
+        leadingContent = { Icon(VoiceIcons.BugReport, contentDescription = null) },
+        supportingContent = { Text("Send this app's Murmur state, library, download folder, and recent log to the server admin") },
+      ) { Text("Send diagnostics") }
     }
     item { SabpImportRow(viewModel::importSabp) }
     item { VersionRow(viewState, viewModel::checkForUpdate) }

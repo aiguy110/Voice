@@ -5,6 +5,11 @@
 - Keep this module self-contained so it can be offered upstream: Voice-side changes are limited to `Destination.Murmur`, the Settings
   entry, and `app` wiring.
 - `MurmurTelemetry` implements `FolderPickListener`: when the user opts in, every folder they pick to add is walked and its tree sent to `POST /telemetry`.
+- `MurmurReporter` sends every telemetry report (opt-in, background, never throws; `reportOnce` for failures that repeat each pass).
+  `MagnetImports` reports each lookup, its detected books, the chosen import, each book moved into place, and failures. `MurmurLog` keeps
+  the recent Info+ app log in `filesDir/murmur/log*.txt` (release builds have no other writer) and failure reports attach it.
+  "Send diagnostics" in Murmur settings sends `MurmurDiagnostics`: settings without the token, Voice's folders and books, the download folder
+  tree, and the log. Never put tokens or announce keys in reports or log lines.
 - `MurmurCommunityLibrary` implements the `CommunityLibrary` seam (`core/data/api`, `voice.core.data.community`), so Murmur books show in Voice's library under
   "Murmur Community". `MurmurRepository.library` is the cached library; every sync and user action refreshes it and `MurmurCovers`
   (holders upload a 400px thumbnail when the server has none; everyone else caches covers under `filesDir/murmur/covers`).
